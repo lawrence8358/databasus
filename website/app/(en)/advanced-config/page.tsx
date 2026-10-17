@@ -528,6 +528,43 @@ Details: permission denied`}</code></pre>
                 stops with the failed operation and this documentation link.
               </p>
 
+              <h2 id="data-locations">Data locations</h2>
+
+              <p>Databasus keeps its secret key, instance file and log in a data folder, and local backups in a backups folder. The Docker image stores both on the <code>/databasus-data</code> volume, so leave these variables unset there and mount the volume instead. They are meant for runs outside the image, such as the Windows service. Relative paths resolve against the working directory.</p>
+
+              <table>
+                <thead>
+                  <tr>
+                    <th>Variable</th>
+                    <th>Default</th>
+                    <th>Description</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>
+                      <code>DATABASUS_DATA_DIR</code>
+                    </td>
+                    <td data-label="Default"><code>/databasus-data</code></td>
+                    <td data-label="Description">Secret key, <code>instance.json</code> and <code>databasus.log</code>.</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>DATABASUS_BACKUPS_DIR</code>
+                    </td>
+                    <td data-label="Default"><code>DATABASUS_DATA_DIR/backups</code></td>
+                    <td data-label="Description">Local storage backups.</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>DATABASUS_TEMP_DIR</code>
+                    </td>
+                    <td data-label="Default">the <code>temp</code> folder inside <code>DATABASUS_BACKUPS_DIR</code> when that is set, otherwise <code>DATABASUS_DATA_DIR/temp</code></td>
+                    <td data-label="Description">Files still being written. Keep it on the same disk as the backups folder, so finishing a backup is a rename rather than a copy.</td>
+                  </tr>
+                </tbody>
+              </table>
+
               <h2 id="telemetry">Telemetry</h2>
 
               <p>
