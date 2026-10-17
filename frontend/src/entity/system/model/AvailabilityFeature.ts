@@ -1,0 +1,5 @@
+export enum AvailabilityFeature {
+  PHYSICAL_BACKUP = 'PHYSICAL_BACKUP',
+  PITR = 'PITR',
+  VERIFICATION_AGENT = 'VERIFICATION_AGENT',
+}
