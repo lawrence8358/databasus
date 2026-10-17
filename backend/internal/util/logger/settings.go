@@ -12,6 +12,8 @@ import (
 	"sync"
 
 	"github.com/joho/godotenv"
+
+	"databasus-backend/internal/util/locations"
 )
 
 const (
@@ -87,12 +89,13 @@ func parseLevel(rawLevel string) slog.Level {
 }
 
 // The file is the forensic copy an operator reaches for when stdout is already gone, so only an
-// explicit opt-out turns it off. Its location and rotation limits are fixed: it shares the data
-// volume with secret.key, and a path outside that volume would not survive a container restart.
+// explicit opt-out turns it off. Its location follows the data folder and its rotation limits are
+// fixed: it shares the data volume with secret.key, and a path outside that volume would not
+// survive a container restart.
 func parseLogFileSettings() logFileSettings {
 	return logFileSettings{
 		isEnabled: !strings.EqualFold(strings.TrimSpace(os.Getenv("LOG_FILE_IS_ENABLED")), "false"),
-		path:      filepath.Join(getDataFolder(), serviceName+".log"),
+		path:      filepath.Join(locations.GetDataFolder(), serviceName+".log"),
 	}
 }
 
@@ -216,30 +219,6 @@ func hasAuthorization(headers map[string]string) bool {
 	return false
 }
 
-func getDataFolder() string {
-	return filepath.Join(filepath.Dir(getBackendRoot()), "databasus-data")
-}
-
-func getBackendRoot() string {
-	backendRoot, err := os.Getwd()
-	if err != nil {
-		return "."
-	}
-
-	for {
-		if _, err := os.Stat(filepath.Join(backendRoot, "go.mod")); err == nil {
-			return backendRoot
-		}
-
-		parent := filepath.Dir(backendRoot)
-		if parent == backendRoot {
-			return backendRoot
-		}
-
-		backendRoot = parent
-	}
-}
-
 var ensureEnvLoaded = sync.OnceFunc(func() {
-	_ = godotenv.Load(filepath.Join(filepath.Dir(getBackendRoot()), ".env"))
+	_ = godotenv.Load(filepath.Join(filepath.Dir(locations.GetBackendRoot()), ".env"))
 })
