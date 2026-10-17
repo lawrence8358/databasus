@@ -1,9 +1,18 @@
 package availability
 
 import (
-	"slices"
+	"sync/atomic"
 	"testing"
 )
+
+const testOverrideReason = "disabled for this test"
+
+type unavailableForTest struct {
+	unavailableEngines  []Engine
+	unavailableFeatures []Feature
+}
+
+var testOverride atomic.Pointer[unavailableForTest]
 
 // MarkUnavailableForTest overrides availability for the whole process until the test ends, so a
 // test that calls it must not run in parallel with tests that create databases or use the marked
@@ -11,28 +20,6 @@ import (
 func MarkUnavailableForTest(t testing.TB, engines []Engine, features []Feature) {
 	t.Helper()
 
-	const reason = "disabled for this test"
-
-	marked := GetAvailability()
-
-	for i, engineAvailability := range marked.Engines {
-		if slices.Contains(engines, engineAvailability.Engine) {
-			marked.Engines[i] = EngineAvailability{
-				Engine:            engineAvailability.Engine,
-				UnavailableReason: reason,
-			}
-		}
-	}
-
-	for i, featureAvailability := range marked.Features {
-		if slices.Contains(features, featureAvailability.Feature) {
-			marked.Features[i] = FeatureAvailability{
-				Feature:           featureAvailability.Feature,
-				UnavailableReason: reason,
-			}
-		}
-	}
-
-	overriddenAvailability.Store(&marked)
-	t.Cleanup(func() { overriddenAvailability.Store(nil) })
+	testOverride.Store(&unavailableForTest{unavailableEngines: engines, unavailableFeatures: features})
+	t.Cleanup(func() { testOverride.Store(nil) })
 }

@@ -6,7 +6,6 @@ import (
 	"runtime"
 	"slices"
 	"sync"
-	"sync/atomic"
 
 	"databasus-backend/internal/util/logger"
 	"databasus-backend/internal/util/tools"
@@ -37,29 +36,32 @@ var orderedFeatures = []Feature{
 	FeatureVerificationAgent,
 }
 
-type detection struct {
-	availability        Availability
+type engineDetection struct {
+	engines             []EngineAvailability
 	toolResultsByEngine map[Engine][]tools.ToolCheckResult
 }
 
 // The installation does not change while the process runs, and the healthcheck re-reads the
-// PostgreSQL bundle on its own, so availability is settled once.
-var detectAvailability = sync.OnceValue(func() detection {
-	return buildDetection(getPlatformUnsupportedEngines(), getPlatformUnsupportedFeatures())
-})
-
-var overriddenAvailability atomic.Pointer[Availability]
+// PostgreSQL bundle on its own, so availability is settled once. Features are settled apart from
+// engines so that asking about a feature never starts the client tools.
+var (
+	detectEngines = sync.OnceValue(func() engineDetection {
+		return buildEngineDetection(getPlatformUnsupportedEngines())
+	})
+	detectFeatures = sync.OnceValue(func() []FeatureAvailability {
+		return buildFeatureAvailabilities(getPlatformUnsupportedFeatures())
+	})
+)
 
 func GetAvailability() Availability {
-	if overridden := overriddenAvailability.Load(); overridden != nil {
-		return cloneAvailability(*overridden)
+	return Availability{
+		Engines:  getEngineAvailabilities(),
+		Features: getFeatureAvailabilities(),
 	}
-
-	return cloneAvailability(detectAvailability().availability)
 }
 
 func RequireEngine(engine Engine) error {
-	for _, engineAvailability := range GetAvailability().Engines {
+	for _, engineAvailability := range getEngineAvailabilities() {
 		if engineAvailability.Engine != engine {
 			continue
 		}
@@ -80,7 +82,7 @@ func RequireEngine(engine Engine) error {
 }
 
 func RequireFeature(feature Feature) error {
-	for _, featureAvailability := range GetAvailability().Features {
+	for _, featureAvailability := range getFeatureAvailabilities() {
 		if featureAvailability.Feature != feature {
 			continue
 		}
@@ -104,14 +106,14 @@ func RequireFeature(feature Feature) error {
 // only degrades: an instance that backs up no MySQL database has no reason to refuse to start over
 // a missing mysqldump, while without a PostgreSQL client it cannot do anything at all.
 func LogAvailabilityAndExitIfPostgresqlUnavailable(availabilityLogger *slog.Logger, isShowLogs bool) {
-	detected := detectAvailability()
+	detectedEngines := detectEngines()
 
-	for _, engineAvailability := range detected.availability.Engines {
+	for _, engineAvailability := range detectedEngines.engines {
 		engineLogger := availabilityLogger.With("engine", engineAvailability.Engine)
 
 		logClientToolResults(
 			engineLogger,
-			detected.toolResultsByEngine[engineAvailability.Engine],
+			detectedEngines.toolResultsByEngine[engineAvailability.Engine],
 			isShowLogs,
 		)
 
@@ -123,7 +125,7 @@ func LogAvailabilityAndExitIfPostgresqlUnavailable(availabilityLogger *slog.Logg
 		}
 	}
 
-	for _, featureAvailability := range detected.availability.Features {
+	for _, featureAvailability := range detectFeatures() {
 		if !featureAvailability.IsAvailable {
 			availabilityLogger.Warn(
 				"feature unavailable",
@@ -133,24 +135,60 @@ func LogAvailabilityAndExitIfPostgresqlUnavailable(availabilityLogger *slog.Logg
 		}
 	}
 
-	if !isEngineAvailableIn(detected.availability, EnginePostgresql) {
+	if !isEngineAvailableIn(detectedEngines.engines, EnginePostgresql) {
 		availabilityLogger.Error("PostgreSQL client tools are required, exiting")
 		logger.ExitAfterFlush(1)
 	}
 }
 
-func buildDetection(unsupportedEngines []Engine, unsupportedFeatures []Feature) detection {
-	unsupportedReason := fmt.Sprintf("not supported on %s", runtime.GOOS)
+func getEngineAvailabilities() []EngineAvailability {
+	engineAvailabilities := slices.Clone(detectEngines().engines)
 
-	detected := detection{
+	if override := testOverride.Load(); override != nil {
+		for i, engineAvailability := range engineAvailabilities {
+			if slices.Contains(override.unavailableEngines, engineAvailability.Engine) {
+				engineAvailabilities[i] = EngineAvailability{
+					Engine:            engineAvailability.Engine,
+					UnavailableReason: testOverrideReason,
+				}
+			}
+		}
+	}
+
+	return engineAvailabilities
+}
+
+func getFeatureAvailabilities() []FeatureAvailability {
+	featureAvailabilities := slices.Clone(detectFeatures())
+
+	if override := testOverride.Load(); override != nil {
+		for i, featureAvailability := range featureAvailabilities {
+			if slices.Contains(override.unavailableFeatures, featureAvailability.Feature) {
+				featureAvailabilities[i] = FeatureAvailability{
+					Feature:           featureAvailability.Feature,
+					UnavailableReason: testOverrideReason,
+				}
+			}
+		}
+	}
+
+	return featureAvailabilities
+}
+
+func getUnsupportedReason() string {
+	return fmt.Sprintf("not supported on %s", runtime.GOOS)
+}
+
+func buildEngineDetection(unsupportedEngines []Engine) engineDetection {
+	detected := engineDetection{
 		toolResultsByEngine: make(map[Engine][]tools.ToolCheckResult),
 	}
 
 	for _, engineTools := range engineClientTools {
 		if slices.Contains(unsupportedEngines, engineTools.engine) {
-			detected.availability.Engines = append(detected.availability.Engines, EngineAvailability{
+			detected.engines = append(detected.engines, EngineAvailability{
 				Engine:            engineTools.engine,
-				UnavailableReason: unsupportedReason,
+				UnavailableReason: getUnsupportedReason(),
 			})
 
 			continue
@@ -167,8 +205,14 @@ func buildDetection(unsupportedEngines []Engine, unsupportedFeatures []Feature) 
 			}
 		}
 
-		detected.availability.Engines = append(detected.availability.Engines, engineAvailability)
+		detected.engines = append(detected.engines, engineAvailability)
 	}
+
+	return detected
+}
+
+func buildFeatureAvailabilities(unsupportedFeatures []Feature) []FeatureAvailability {
+	featureAvailabilities := make([]FeatureAvailability, 0, len(orderedFeatures))
 
 	for _, feature := range orderedFeatures {
 		featureAvailability := FeatureAvailability{Feature: feature, IsAvailable: true}
@@ -177,7 +221,7 @@ func buildDetection(unsupportedEngines []Engine, unsupportedFeatures []Feature) 
 		case slices.Contains(unsupportedFeatures, feature):
 			featureAvailability = FeatureAvailability{
 				Feature:           feature,
-				UnavailableReason: unsupportedReason,
+				UnavailableReason: getUnsupportedReason(),
 			}
 
 		case feature == FeaturePitr && slices.Contains(unsupportedFeatures, FeaturePhysicalBackup):
@@ -187,10 +231,10 @@ func buildDetection(unsupportedEngines []Engine, unsupportedFeatures []Feature) 
 			}
 		}
 
-		detected.availability.Features = append(detected.availability.Features, featureAvailability)
+		featureAvailabilities = append(featureAvailabilities, featureAvailability)
 	}
 
-	return detected
+	return featureAvailabilities
 }
 
 // A failing fatal-tier bundle makes the whole engine unusable, because the app picks the client by
@@ -240,9 +284,9 @@ func logClientToolResults(
 	}
 }
 
-func isEngineAvailableIn(availability Availability, engine Engine) bool {
+func isEngineAvailableIn(engineAvailabilities []EngineAvailability, engine Engine) bool {
 	return slices.ContainsFunc(
-		availability.Engines,
+		engineAvailabilities,
 		func(engineAvailability EngineAvailability) bool {
 			return engineAvailability.Engine == engine && engineAvailability.IsAvailable
 		},
@@ -257,11 +301,4 @@ func getEngineDisplayName(engine Engine) string {
 	}
 
 	return string(engine)
-}
-
-func cloneAvailability(availability Availability) Availability {
-	return Availability{
-		Engines:  slices.Clone(availability.Engines),
-		Features: slices.Clone(availability.Features),
-	}
 }

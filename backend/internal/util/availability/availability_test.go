@@ -11,13 +11,13 @@ import (
 
 var allEngines = []Engine{EnginePostgresql, EngineMysql, EngineMariadb, EngineMongodb}
 
-func Test_BuildDetection_WhenPlatformSupportsNoEngine_MarksEveryEngineUnavailableWithoutProbingTools(
+func Test_BuildEngineDetection_WhenPlatformSupportsNoEngine_MarksEveryEngineUnavailableWithoutProbingTools(
 	t *testing.T,
 ) {
-	detected := buildDetection(allEngines, nil)
+	detected := buildEngineDetection(allEngines)
 
-	assert.Len(t, detected.availability.Engines, len(allEngines))
-	for _, engineAvailability := range detected.availability.Engines {
+	assert.Len(t, detected.engines, len(allEngines))
+	for _, engineAvailability := range detected.engines {
 		assert.False(t, engineAvailability.IsAvailable, engineAvailability.Engine)
 		assert.Contains(t, engineAvailability.UnavailableReason, "not supported on")
 	}
@@ -25,11 +25,13 @@ func Test_BuildDetection_WhenPlatformSupportsNoEngine_MarksEveryEngineUnavailabl
 	assert.Empty(t, detected.toolResultsByEngine)
 }
 
-func Test_BuildDetection_WhenPhysicalBackupIsUnsupported_MarksPitrUnavailableToo(t *testing.T) {
-	detected := buildDetection(allEngines, []Feature{FeaturePhysicalBackup})
+func Test_BuildFeatureAvailabilities_WhenPhysicalBackupIsUnsupported_MarksPitrUnavailableToo(
+	t *testing.T,
+) {
+	featureAvailabilities := buildFeatureAvailabilities([]Feature{FeaturePhysicalBackup})
 
 	featuresByName := make(map[Feature]FeatureAvailability)
-	for _, featureAvailability := range detected.availability.Features {
+	for _, featureAvailability := range featureAvailabilities {
 		featuresByName[featureAvailability.Feature] = featureAvailability
 	}
 
@@ -43,9 +45,9 @@ func Test_IsClientToolsUsable_ForBundleOutcomes_ReportsWhetherTheEngineCanRun(t 
 	brokenBundleErrors := []error{errors.New("client command not found")}
 
 	testCases := []struct {
-		name         string
-		toolResults  []tools.ToolCheckResult
-		isUsable bool
+		name        string
+		toolResults []tools.ToolCheckResult
+		isUsable    bool
 	}{
 		{
 			name: "non-fatal engine with one working bundle",
@@ -72,9 +74,9 @@ func Test_IsClientToolsUsable_ForBundleOutcomes_ReportsWhetherTheEngineCanRun(t 
 			isUsable: false,
 		},
 		{
-			name:         "engine without bundles",
-			toolResults:  nil,
-			isUsable: false,
+			name:        "engine without bundles",
+			toolResults: nil,
+			isUsable:    false,
 		},
 	}
 
