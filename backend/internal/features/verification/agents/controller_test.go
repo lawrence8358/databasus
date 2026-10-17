@@ -19,6 +19,7 @@ import (
 	workspaces_controllers "databasus-backend/internal/features/workspaces/controllers"
 	workspaces_testing "databasus-backend/internal/features/workspaces/testing"
 	"databasus-backend/internal/storage"
+	"databasus-backend/internal/util/availability"
 	test_utils "databasus-backend/internal/util/testing"
 )
 
@@ -652,4 +653,21 @@ func Test_ListAgents_JSONShape_NoInternalFields(t *testing.T) {
 	assert.True(t, hasMaxRamGb)
 	_, hasMaxRamMb := agentJsonMaps[0]["maxRamMb"]
 	assert.False(t, hasMaxRamMb, "RAM is in GB - the legacy 'maxRamMb' key must not appear")
+}
+
+func Test_CreateAgent_WhenVerificationAgentIsUnavailable_ReturnsBadRequest(t *testing.T) {
+	availability.MarkUnavailableForTest(t, nil, []availability.Feature{availability.FeatureVerificationAgent})
+
+	router := createTestRouter()
+	admin := users_testing.CreateTestUser(t.Context(), users_enums.UserRoleAdmin)
+
+	response := test_utils.MakePostRequest(
+		t, router,
+		"/api/v1/verification/agents",
+		"Bearer "+admin.Token,
+		CreateAgentRequest{Name: "test-agent-" + uuid.New().String()},
+		http.StatusBadRequest,
+	)
+
+	assert.Contains(t, string(response.Body), "verification agent is not available on this instance")
 }

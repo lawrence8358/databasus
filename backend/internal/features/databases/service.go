@@ -87,6 +87,10 @@ func (s *DatabaseService) CreateDatabase(
 
 	database.WorkspaceID = &workspaceID
 
+	if err := database.RequireTypeAvailable(); err != nil {
+		return nil, err
+	}
+
 	if err := database.Validate(); err != nil {
 		return nil, err
 	}
@@ -180,6 +184,10 @@ func (s *DatabaseService) UpdateDatabase(
 	oldBackupType := getPhysicalBackupType(existingDatabase)
 
 	existingDatabase.Update(database)
+
+	if err := existingDatabase.RequireTypeAvailable(); err != nil {
+		return err
+	}
 
 	if err := existingDatabase.Validate(); err != nil {
 		return err
@@ -574,6 +582,10 @@ func (s *DatabaseService) CopyDatabase(
 
 	newDatabase := existingDatabase.CopyForNewDatabase()
 	newDatabase.Name = existingDatabase.Name + " (Copy)"
+
+	if err := newDatabase.RequireTypeAvailable(); err != nil {
+		return nil, err
+	}
 
 	if err := newDatabase.Validate(); err != nil {
 		return nil, err

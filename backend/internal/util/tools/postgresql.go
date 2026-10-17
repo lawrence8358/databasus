@@ -72,7 +72,7 @@ func checkPostgresql() []ToolCheckResult {
 		binDir := getPostgresqlBinDir(v)
 
 		results = append(results, ToolCheckResult{
-			Db:      "postgresql",
+			Db:      DbEnginePostgresql,
 			Version: string(v),
 			BinDir:  binDir,
 			Errors: runBinDirChecks(

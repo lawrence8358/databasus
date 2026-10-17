@@ -45,7 +45,7 @@ func checkMongodb() []ToolCheckResult {
 	binDir := getMongodbBinDir()
 
 	return []ToolCheckResult{{
-		Db:      "mongodb",
+		Db:      DbEngineMongodb,
 		Version: "tools",
 		BinDir:  binDir,
 		// The MongoDB tools bundle is not named after a release line — one

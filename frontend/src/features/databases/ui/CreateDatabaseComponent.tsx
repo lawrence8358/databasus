@@ -19,6 +19,7 @@ import {
   initializeDatabaseTypeData,
   isPostgresType,
 } from '../../../entity/databases';
+import { AvailabilityFeature, useAvailability } from '../../../entity/system';
 import { translateApiError } from '../../../shared/i18n';
 import { EditLogicalBackupConfigComponent } from '../../backups/logical';
 import { EditPhysicalBackupConfigComponent } from '../../backups/physical';
@@ -78,6 +79,8 @@ export const CreateDatabaseComponent = ({
   const isPhysical = database.type === DatabaseType.POSTGRES_PHYSICAL;
   const isPostgres = isPostgresType(database.type);
 
+  const { isFeatureAvailable } = useAvailability();
+
   // The read-only user step explains its choice in long sentences and puts three buttons in one
   // row, which the narrow wizard width cannot hold.
   useEffect(() => {
@@ -118,6 +121,8 @@ export const CreateDatabaseComponent = ({
     setIsCreating(false);
   };
 
+  const isPostgresBackupTypeChoosable = isFeatureAvailable(AvailabilityFeature.PHYSICAL_BACKUP);
+
   if (step === 'base-info') {
     return (
       <div>
@@ -131,7 +136,11 @@ export const CreateDatabaseComponent = ({
           onSaved={(db) => {
             const initializedDb = initializeDatabaseTypeData(db);
             setDatabase({ ...initializedDb });
-            setStep(isPostgresType(db.type) ? 'postgres-backup-type' : 'db-settings');
+            setStep(
+              isPostgresType(db.type) && isPostgresBackupTypeChoosable
+                ? 'postgres-backup-type'
+                : 'db-settings',
+            );
           }}
         />
       </div>
@@ -160,7 +169,11 @@ export const CreateDatabaseComponent = ({
         isShowCancelButton={false}
         onCancel={() => onClose()}
         isShowBackButton
-        onBack={() => setStep(isPostgres ? 'postgres-backup-type' : 'base-info')}
+        onBack={() =>
+          setStep(
+            isPostgres && isPostgresBackupTypeChoosable ? 'postgres-backup-type' : 'base-info',
+          )
+        }
         saveButtonText={t('common.actions.continue')}
         isSaveToApi={false}
         onConnectionErrorChange={onConnectionErrorChange}

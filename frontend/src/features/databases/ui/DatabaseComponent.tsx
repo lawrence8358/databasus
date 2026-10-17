@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type Database, DatabaseType, databaseApi } from '../../../entity/databases';
+import { AvailabilityFeature, useAvailability } from '../../../entity/system';
 import { LogicalBackupsComponent } from '../../backups/logical';
 import { PhysicalBackupsComponent } from '../../backups/physical';
 import { HealthckeckAttemptsComponent } from '../../healthcheck';
@@ -47,6 +48,8 @@ export const DatabaseComponent = ({
     databaseApi.getDatabase(databaseId).then(setDatabase);
   };
 
+  const { isFeatureAvailable } = useAvailability();
+
   useEffect(() => {
     loadSettings();
   }, [databaseId]);
@@ -54,6 +57,9 @@ export const DatabaseComponent = ({
   if (!database) {
     return <Spin />;
   }
+
+  const isVerificationShown =
+    isLogicalDatabase && isFeatureAvailable(AvailabilityFeature.VERIFICATION_AGENT);
 
   return (
     <div
@@ -76,7 +82,7 @@ export const DatabaseComponent = ({
           {t('databases.tabs.backups')}
         </div>
 
-        {isLogicalDatabase && (
+        {isVerificationShown && (
           <div
             className={`mr-2 cursor-pointer rounded-tl-md rounded-tr-md px-6 py-2 ${currentTab === 'verifications' ? 'bg-white dark:bg-gray-800' : 'bg-gray-200 dark:bg-gray-700'}`}
             onClick={() => setCurrentTab('verifications')}
@@ -124,7 +130,7 @@ export const DatabaseComponent = ({
         </>
       )}
 
-      {currentTab === 'verifications' && isLogicalDatabase && (
+      {currentTab === 'verifications' && isVerificationShown && (
         <VerificationsComponent
           database={database}
           isCanManageDBs={isCanManageDBs}

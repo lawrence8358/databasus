@@ -7,8 +7,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	system_availability "databasus-backend/internal/features/system/availability"
 	users_enums "databasus-backend/internal/features/users/enums"
 	users_middleware "databasus-backend/internal/features/users/middleware"
+	"databasus-backend/internal/util/availability"
 )
 
 type AgentController struct {
@@ -22,7 +24,11 @@ func (c *AgentController) RegisterRoutes(router *gin.RouterGroup) {
 	adminOnly := router.Group("/verification/agents")
 	adminOnly.Use(users_middleware.RequireRole(users_enums.UserRoleAdmin))
 
-	adminOnly.POST("", c.CreateAgent)
+	adminOnly.POST(
+		"",
+		system_availability.RequireFeature(availability.FeatureVerificationAgent),
+		c.CreateAgent,
+	)
 	adminOnly.GET("", c.ListAgents)
 	adminOnly.POST("/:id/rotate-token", c.RotateToken)
 	adminOnly.DELETE("/:id", c.DeleteAgent)

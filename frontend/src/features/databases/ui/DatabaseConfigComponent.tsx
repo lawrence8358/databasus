@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { logicalBackupConfigApi } from '../../../entity/backups/logical';
 import { physicalBackupConfigApi } from '../../../entity/backups/physical';
 import { type Database, DatabaseType, databaseApi } from '../../../entity/databases';
+import { AvailabilityFeature, useAvailability } from '../../../entity/system';
 import { translateApiError } from '../../../shared/i18n';
 import { ToastHelper } from '../../../shared/toast';
 import { ConfirmationComponent } from '../../../shared/ui';
@@ -75,6 +76,8 @@ export const DatabaseConfigComponent = ({
   const [currentStorageId, setCurrentStorageId] = useState<string | undefined>();
 
   const isPhysicalDatabase = database.type === DatabaseType.POSTGRES_PHYSICAL;
+
+  const { isFeatureAvailable } = useAvailability();
 
   useEffect(() => {
     const loadStorageId = isPhysicalDatabase
@@ -197,6 +200,8 @@ export const DatabaseConfigComponent = ({
   };
 
   const isLogicalDatabase = database.type === DatabaseType.POSTGRES_LOGICAL;
+  const isVerificationShown =
+    isLogicalDatabase && isFeatureAvailable(AvailabilityFeature.VERIFICATION_AGENT);
 
   return (
     <div className="relative w-full rounded-tr-md rounded-br-md rounded-bl-md bg-white p-3 shadow sm:p-5 dark:bg-gray-800">
@@ -408,7 +413,7 @@ export const DatabaseConfigComponent = ({
           </div>
         </div>
 
-        {isLogicalDatabase && (
+        {isVerificationShown && (
           <div className="w-full lg:w-[400px]">
             <div className="mt-5 flex items-center font-bold">
               <div>{t('databases.config.sections.restoreVerification')}</div>

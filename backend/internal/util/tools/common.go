@@ -4,15 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
-
-	"databasus-backend/internal/util/logger"
 )
 
 // clientVersionTimeout bounds one --version call. A client that has not
@@ -35,7 +32,7 @@ var executionVerdicts sync.Map
 // is considered fatal when missing/broken should crash the app at startup
 // (Postgres) and non-fatal otherwise (MySQL, MariaDB, MongoDB).
 type ToolCheckResult struct {
-	Db      string
+	Db      DbEngine
 	Version string
 	BinDir  string
 	Errors  []error
@@ -151,10 +148,25 @@ func runClients(
 	return errs
 }
 
+type DbEngine string
+
+const (
+	DbEnginePostgresql DbEngine = "postgresql"
+	DbEngineMysql      DbEngine = "mysql"
+	DbEngineMariadb    DbEngine = "mariadb"
+	DbEngineMongodb    DbEngine = "mongodb"
+)
+
+var clientToolsChecksByEngine = map[DbEngine]func() []ToolCheckResult{
+	DbEnginePostgresql: checkPostgresql,
+	DbEngineMysql:      checkMysql,
+	DbEngineMariadb:    checkMariadb,
+	DbEngineMongodb:    checkMongodb,
+}
+
 // CheckAllClientTools verifies every expected client binary for the current
 // arch is present, executable, starts, and reports a version on the release
-// line its bundle is registered under. Pure: never logs, never exits. Used by
-// startup (config) and runtime (healthcheck).
+// line its bundle is registered under. Pure: never logs, never exits.
 func CheckAllClientTools() []ToolCheckResult {
 	results := checkPostgresql()
 	results = append(results, checkMysql()...)
@@ -164,36 +176,16 @@ func CheckAllClientTools() []ToolCheckResult {
 	return results
 }
 
-// Only the Postgres bundle is fatal: the others degrade to a warning because an instance that
-// backs up no MySQL database has no reason to refuse to start over a missing mysqldump.
-func LogAndExitIfClientToolsBroken(toolsLogger *slog.Logger, isShowLogs bool) {
-	results := CheckAllClientTools()
-
-	hasFatalError := false
-	for _, r := range results {
-		log := toolsLogger.With("db", r.Db, "version", r.Version, "path", r.BinDir)
-
-		if len(r.Errors) == 0 {
-			if isShowLogs {
-				log.Info("client tools verified")
-			}
-
-			continue
-		}
-
-		for _, err := range r.Errors {
-			if r.IsFatal {
-				log.Error("client tools check failed", "error", err)
-				hasFatalError = true
-			} else {
-				log.Warn("client tools check failed - support disabled", "error", err)
-			}
-		}
+// CheckEngineClientTools runs the same checks as CheckAllClientTools for one
+// engine's bundles only, so an engine the platform does not support is never
+// probed.
+func CheckEngineClientTools(engine DbEngine) []ToolCheckResult {
+	check, isKnown := clientToolsChecksByEngine[engine]
+	if !isKnown {
+		panic(fmt.Sprintf("no client tools check registered for engine %q", engine))
 	}
 
-	if hasFatalError {
-		logger.ExitAfterFlush(1)
-	}
+	return check()
 }
 
 // ClientToolsHealthError returns an aggregated error if any fatal-tier bundle

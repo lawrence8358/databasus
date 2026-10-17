@@ -15,11 +15,11 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/joho/godotenv"
 
+	"databasus-backend/internal/util/availability"
 	env_utils "databasus-backend/internal/util/env"
 	"databasus-backend/internal/util/locations"
 	"databasus-backend/internal/util/logger"
 	"databasus-backend/internal/util/smtp_transport"
-	"databasus-backend/internal/util/tools"
 )
 
 var log = logger.GetLogger()
@@ -193,7 +193,7 @@ func loadEnvVariables() {
 	}
 	log.Info("ENV_MODE loaded", "mode", env.EnvMode)
 
-	tools.LogAndExitIfClientToolsBroken(log, env.ShowDbInstallationVerificationLogs)
+	availability.LogAvailabilityAndExitIfPostgresqlUnavailable(log, env.ShowDbInstallationVerificationLogs)
 
 	if env.TestLocalhost == "" {
 		env.TestLocalhost = "localhost"

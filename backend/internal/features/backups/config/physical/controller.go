@@ -7,7 +7,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	system_availability "databasus-backend/internal/features/system/availability"
 	users_middleware "databasus-backend/internal/features/users/middleware"
+	"databasus-backend/internal/util/availability"
 )
 
 type BackupConfigController struct {
@@ -15,7 +17,11 @@ type BackupConfigController struct {
 }
 
 func (c *BackupConfigController) RegisterRoutes(router *gin.RouterGroup) {
-	router.POST("/backup-configs/physical/save", c.SaveBackupConfig)
+	router.POST(
+		"/backup-configs/physical/save",
+		system_availability.RequireFeature(availability.FeaturePhysicalBackup),
+		c.SaveBackupConfig,
+	)
 	router.GET("/backup-configs/physical/database/:id", c.GetBackupConfigByDbID)
 	router.POST("/backup-configs/physical/database/:id/transfer", c.TransferDatabase)
 }

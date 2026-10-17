@@ -32,6 +32,7 @@ import {
 } from '../../../../entity/backups/logical';
 import { BackupEncryption } from '../../../../entity/backups/shared';
 import { type Database, DatabaseType } from '../../../../entity/databases';
+import { AvailabilityFeature, useAvailability } from '../../../../entity/system';
 import { verificationRunsApi } from '../../../../entity/verification/runs';
 import { usePersistentState, usePolledPagedList } from '../../../../shared/hooks';
 import {
@@ -252,6 +253,8 @@ export const LogicalBackupsComponent = ({
     onError: (e) => alert(translateApiError(e, t)),
   });
 
+  const { isFeatureAvailable } = useAvailability();
+
   useEffect(() => {
     setIsBackupConfigLoading(true);
 
@@ -383,6 +386,7 @@ export const LogicalBackupsComponent = ({
 
                 {isCanManageDBs &&
                   database.type === DatabaseType.POSTGRES_LOGICAL &&
+                  isFeatureAvailable(AvailabilityFeature.VERIFICATION_AGENT) &&
                   (verifyingBackupId === record.id ? (
                     <SyncOutlined spin style={{ color: '#155dfc' }} />
                   ) : (
