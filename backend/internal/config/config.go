@@ -16,6 +16,7 @@ import (
 	"github.com/joho/godotenv"
 
 	env_utils "databasus-backend/internal/util/env"
+	"databasus-backend/internal/util/locations"
 	"databasus-backend/internal/util/logger"
 	"databasus-backend/internal/util/smtp_transport"
 	"databasus-backend/internal/util/tools"
@@ -117,25 +118,7 @@ func GetEnv() *EnvVariables {
 }
 
 func loadEnvVariables() {
-	cwd, err := os.Getwd()
-	if err != nil {
-		log.Warn("could not get current working directory", "error", err)
-		cwd = "."
-	}
-
-	backendRoot := cwd
-	for {
-		if _, err := os.Stat(filepath.Join(backendRoot, "go.mod")); err == nil {
-			break
-		}
-
-		parent := filepath.Dir(backendRoot)
-		if parent == backendRoot {
-			break
-		}
-
-		backendRoot = parent
-	}
+	backendRoot := locations.GetBackendRoot()
 
 	envPath := filepath.Join(filepath.Dir(backendRoot), ".env")
 
@@ -216,14 +199,11 @@ func loadEnvVariables() {
 		env.TestLocalhost = "localhost"
 	}
 
-	// Store the data and temp folders one level below the root
-	// (projectRoot/databasus-data -> /databasus-data)
-	env.DataFolder = filepath.Join(filepath.Dir(backendRoot), "databasus-data", "backups")
-	env.TempFolder = filepath.Join(filepath.Dir(backendRoot), "databasus-data", "temp")
-	env.SecretKeyPath = filepath.Join(filepath.Dir(backendRoot), "databasus-data", "secret.key")
-	env.TelemetryInstancePath = filepath.Join(
-		filepath.Dir(backendRoot), "databasus-data", "instance.json",
-	)
+	dataFolder := locations.GetDataFolder()
+	env.DataFolder = locations.GetBackupsFolder()
+	env.TempFolder = locations.GetTempFolder()
+	env.SecretKeyPath = filepath.Join(dataFolder, "secret.key")
+	env.TelemetryInstancePath = filepath.Join(dataFolder, "instance.json")
 
 	if env.IsTesting {
 		if env.TestLogicalPostgres16Port == "" {

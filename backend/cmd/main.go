@@ -55,6 +55,7 @@ import (
 	"databasus-backend/internal/middleware"
 	env_utils "databasus-backend/internal/util/env"
 	files_utils "databasus-backend/internal/util/files"
+	"databasus-backend/internal/util/locations"
 	"databasus-backend/internal/util/logger"
 	_ "databasus-backend/swagger" // swagger docs
 )
@@ -552,25 +553,6 @@ func generateSwaggerDocs(log *slog.Logger) {
 	log.Info("swagger documentation generated successfully")
 }
 
-func runMigrations(log *slog.Logger) {
-	log.Info("running database migrations")
-
-	cmd := exec.CommandContext(context.Background(), "goose", "-dir", "./migrations", "up")
-	cmd.Env = append(
-		os.Environ(),
-		"GOOSE_DRIVER=postgres",
-		"GOOSE_DBSTRING="+config.GetEnv().DatabaseDsn,
-	)
-
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		log.Error("failed to run migrations", "error", err, "output", string(output))
-		logger.ExitAfterFlush(1)
-	}
-
-	log.Info("database migrations completed successfully", "output", string(output))
-}
-
 func enableCors(ginApp *gin.Engine) {
 	if config.GetEnv().EnvMode == env_utils.EnvModeDevelopment {
 		// Setup CORS
@@ -617,7 +599,7 @@ func ginRecoveryWithLogger(log *slog.Logger) gin.HandlerFunc {
 }
 
 func mountFrontend(ginApp *gin.Engine) {
-	staticDir := "./ui/build"
+	staticDir := locations.FindAppFolder(filepath.Join("ui", "build"))
 	ginApp.NoRoute(func(c *gin.Context) {
 		path := filepath.Join(staticDir, c.Request.URL.Path)
 
