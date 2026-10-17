@@ -248,6 +248,50 @@ helm install databasus oci://ghcr.io/databasus/charts/databasus \
 
 ---
 
+## 🪟 Windows 原生安装包
+
+这个 fork（`lawrence8358/databasus`）还提供 Databasus 的 Windows 原生安装包，供不允许安装 Docker 和 WSL2 的机器使用。fork 为什么不再只发布 Docker 镜像，记录在 [ADR-0015](../../adr/0015-windows-native-installer-in-fork.md) 中。
+
+**支持的系统：** Windows Server 2016 及以上版本和 Windows 10/11，仅限 x64。在其他 Windows 版本或 CPU 架构上，安装程序会说明原因并停止安装。
+
+**Windows 上可用的功能：**
+
+- PostgreSQL 12 及以上版本的逻辑备份和恢复（`pg_dump` / `pg_restore`）。数据库本身可以跑在任何操作系统上，通过网络连接
+- 本地磁盘存储，以及 Databasus 原本支持的远程存储（S3、Azure Blob、FTP、SFTP 等）
+- 备份计划、保留策略、加密和通知的行为与 Docker 版完全相同
+
+安装包只附带最新版的 PostgreSQL 客户端工具。新版 `pg_dump` 能备份所有支持的服务器版本，但生成的 dump 不一定能恢复到更旧的服务器上，恢复界面会对此给出提醒。
+
+**Windows 上不可用的功能：**
+
+- MySQL、MariaDB 和 MongoDB
+- 物理备份、增量备份、WAL 流式传输和 PITR
+- 恢复验证 agent
+- 内嵌的物理恢复脚本
+- 备份 Databasus 自身的 metadata 数据库
+- 把网络共享文件夹（UNC 路径）用作备份目录
+- 用域账户或 gMSA 运行服务
+
+Web UI 会隐藏不可用的数据库类型和备份方式。
+
+**安装：**
+
+1. 以管理员身份运行安装程序 `.exe`。安装过程不需要联网，会装好应用本体、一套专门存放 Databasus 自身 metadata 的内置 PostgreSQL 服务器，以及 PostgreSQL 客户端工具。安装程序暂时没有代码签名，Windows 可能会提示发布者未知
+2. 选择程序数据目录（默认 `C:\ProgramData\Databasus`），用来存放 metadata 数据库、密钥和日志；再选一个位于任意本地磁盘上的备份目录，例如 `D:\`。安装程序会检查服务账户能否写入这两个目录
+3. 指定 Web UI 的端口。Web UI 默认只监听 `127.0.0.1`。如果要让同事访问，可以开启局域网访问：此时一律使用 HTTPS，证书可以导入，也可以由安装程序自动生成自签名证书
+4. 可选：在高级选项中让 Databasus 改用外部的 PostgreSQL 数据库存放 metadata，不用内置的那套
+5. 安装完成后，Databasus 以开机自启的 Windows 服务运行，崩溃后会自动重启，浏览器会自动打开 Web UI。你可以在 Windows 的“服务”管理控制台里启动、停止或重启它
+
+安装程序还支持静默模式，所有选项都可以通过命令行参数指定，方便用脚本批量安装。
+
+**升级：** 直接在现有安装上运行新版安装程序。设置、数据库、备份计划和备份都会保留，metadata 的迁移会自动执行，内置 PostgreSQL 的小版本更新也会一并应用，不需要做任何数据转换。
+
+**日志：** 写在程序数据目录下的一个文件夹里。启动时的问题，例如缺少客户端工具或 metadata 数据库起不来，也会写入 Windows 事件查看器。
+
+**卸载：** 默认会保留程序数据目录和备份目录。如果要删除它们，请勾选删除所有数据的选项。注意，程序数据目录里的密钥一旦删除，加密的设置和加密的备份都将无法恢复。
+
+---
+
 ## 🚀 使用
 
 1. **创建第一个账户**：访问 `http://localhost:4005` 并注册。实例上创建的第一个账户就是它的管理员

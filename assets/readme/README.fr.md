@@ -248,6 +248,50 @@ Pour les autres options (NodePort, TLS, HTTPRoute pour Gateway API), consultez l
 
 ---
 
+## 🪟 Installateur natif pour Windows
+
+Ce fork (`lawrence8358/databasus`) distribue aussi Databasus sous forme d'installateur natif pour Windows, destiné aux machines où Docker et WSL2 sont interdits. La raison pour laquelle le fork s'écarte de l'approche « Docker uniquement » est consignée dans l'[ADR-0015](../../adr/0015-windows-native-installer-in-fork.md).
+
+**Systèmes pris en charge :** Windows Server 2016 ou plus récent et Windows 10/11, x64 uniquement. Sur toute autre version de Windows ou architecture de processeur, l'installateur explique pourquoi et s'arrête.
+
+**Ce qui fonctionne sous Windows :**
+
+- Sauvegarde logique et restauration de PostgreSQL 12 et plus récent (`pg_dump` / `pg_restore`). Les bases de données elles-mêmes peuvent tourner sur n'importe quel OS et sont jointes par le réseau
+- Le stockage sur disque local et les stockages distants que Databasus prend déjà en charge (S3, Azure Blob, FTP, SFTP, etc.)
+- Les planifications, les politiques de rétention, le chiffrement et les notifications fonctionnent exactement comme dans la version Docker
+
+Seuls les outils clients PostgreSQL les plus récents sont fournis. Un `pg_dump` plus récent sauvegarde toutes les versions de serveur prises en charge, mais son dump peut ne pas se restaurer sur un serveur plus ancien ; l'écran de restauration vous en avertit.
+
+**Non disponible sous Windows :**
+
+- MySQL, MariaDB et MongoDB
+- Sauvegardes physiques et incrémentales, streaming des WAL et PITR
+- Agent de vérification de restauration
+- Scripts intégrés de restauration physique
+- Sauvegarde de la base de métadonnées de Databasus lui-même
+- Dossiers partagés réseau (chemins UNC) comme répertoire de sauvegarde
+- Exécution du service sous un compte de domaine ou un gMSA
+
+La Web UI masque les moteurs et les modes de sauvegarde indisponibles.
+
+**Installation :**
+
+1. Lancez le `.exe` de l'installateur en tant qu'administrateur. Il n'a pas besoin du réseau et installe l'application, un serveur PostgreSQL intégré pour les métadonnées de Databasus lui-même et les outils clients PostgreSQL. L'installateur n'est pas encore signé, Windows peut donc signaler un éditeur inconnu
+2. Choisissez le répertoire de données du programme (par défaut `C:\ProgramData\Databasus`), qui contient la base de métadonnées, la clé secrète et les logs, ainsi qu'un répertoire de sauvegarde sur n'importe quel disque local, par exemple `D:\`. L'installateur vérifie que le compte du service peut écrire dans les deux
+3. Choisissez le port de la Web UI. Par défaut, la Web UI n'écoute que sur `127.0.0.1`. Pour que vos collègues y accèdent, activez l'accès depuis le réseau local : il passe toujours par HTTPS, avec un certificat que vous importez ou un certificat auto-signé généré par l'installateur
+4. Si vous le souhaitez, dans les options avancées, faites pointer Databasus vers une base PostgreSQL externe pour les métadonnées au lieu de la base intégrée
+5. À la fin de l'installation, Databasus tourne comme service Windows à démarrage automatique, redémarre après un plantage, et votre navigateur ouvre la Web UI. Démarrez, arrêtez ou redémarrez-le depuis la console Services de Windows
+
+L'installateur propose aussi un mode silencieux où toutes les options se passent en ligne de commande, pour les installations scriptées.
+
+**Mise à jour :** lancez le nouvel installateur par-dessus l'installation existante. Les paramètres, les bases de données, les planifications et les sauvegardes sont conservés, les migrations des métadonnées s'exécutent toutes seules et le PostgreSQL intégré reçoit ses mises à jour mineures sans aucune conversion de données.
+
+**Logs :** écrits dans un dossier du répertoire de données du programme. Les problèmes au démarrage, comme des outils clients manquants ou une base de métadonnées qui ne démarre pas, sont aussi inscrits dans l'Observateur d'événements de Windows.
+
+**Désinstallation :** par défaut, le répertoire de données du programme et le répertoire de sauvegarde restent sur le disque. Pour les supprimer, cochez l'option de suppression de toutes les données. Sans la clé secrète du répertoire de données du programme, les paramètres chiffrés et les sauvegardes chiffrées sont irrécupérables.
+
+---
+
 ## 🚀 Utilisation
 
 1. **Créez le premier compte** : rendez-vous sur `http://localhost:4005` et inscrivez-vous. Le premier compte créé sur une instance est celui qui l'administre
