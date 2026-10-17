@@ -127,7 +127,7 @@ func checkMariadb() []ToolCheckResult {
 		binDir := getMariadbBinDir(cv)
 
 		results = append(results, ToolCheckResult{
-			Db:      "mariadb",
+			Db:      DbEngineMariadb,
 			Version: string(cv),
 			BinDir:  binDir,
 			Errors:  runBinDirChecks(binDir, mariadbRequired, string(cv), parseMariadbClientVersion),

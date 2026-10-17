@@ -16,8 +16,10 @@ import (
 	"databasus-backend/internal/features/backups/backups/download/stream_guard"
 	backups_dto_physical "databasus-backend/internal/features/backups/backups/dto/physical"
 	backups_services "databasus-backend/internal/features/backups/backups/services"
+	system_availability "databasus-backend/internal/features/system/availability"
 	users_middleware "databasus-backend/internal/features/users/middleware"
 	users_models "databasus-backend/internal/features/users/models"
+	"databasus-backend/internal/util/availability"
 )
 
 type PhysicalBackupController struct {
@@ -26,11 +28,21 @@ type PhysicalBackupController struct {
 }
 
 func (c *PhysicalBackupController) RegisterRoutes(router *gin.RouterGroup) {
-	router.GET("/backups/physical/database/:id/backups", c.GetBackups)
-	router.POST("/backups/physical/database/:id/trigger", c.TriggerBackup)
-	router.POST("/backups/physical/database/:id/restore-token", c.GenerateRestoreToken)
+	requirePhysicalBackup := system_availability.RequireFeature(availability.FeaturePhysicalBackup)
 
-	router.POST("/backups/physical/backups/:backupId/restore-token", c.GenerateBackupRestoreToken)
+	router.GET("/backups/physical/database/:id/backups", c.GetBackups)
+	router.POST("/backups/physical/database/:id/trigger", requirePhysicalBackup, c.TriggerBackup)
+	router.POST(
+		"/backups/physical/database/:id/restore-token",
+		requirePhysicalBackup,
+		c.GenerateRestoreToken,
+	)
+
+	router.POST(
+		"/backups/physical/backups/:backupId/restore-token",
+		requirePhysicalBackup,
+		c.GenerateBackupRestoreToken,
+	)
 	router.POST("/backups/physical/backups/:backupId/cancel", c.CancelBackup)
 	router.DELETE("/backups/physical/backups/:backupId", c.DeleteBackup)
 }

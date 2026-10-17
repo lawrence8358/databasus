@@ -89,7 +89,7 @@ func checkMysql() []ToolCheckResult {
 		binDir := getMysqlBinDir(v)
 
 		results = append(results, ToolCheckResult{
-			Db:      "mysql",
+			Db:      DbEngineMysql,
 			Version: string(v),
 			BinDir:  binDir,
 			Errors:  runBinDirChecks(binDir, mysqlRequired, string(v), parseMysqlClientVersion),

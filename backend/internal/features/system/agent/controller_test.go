@@ -10,6 +10,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"databasus-backend/internal/util/availability"
 )
 
 func buildAgentDownloadRouter(t *testing.T) *gin.Engine {
@@ -69,4 +71,19 @@ func Test_DownloadVerificationAgent_WhenBinaryIsMissing_ReturnsNotFound(t *testi
 	)
 
 	assert.Equal(t, http.StatusNotFound, response.Code)
+}
+
+func Test_DownloadVerificationAgent_WhenVerificationAgentIsUnavailable_ReturnsBadRequest(t *testing.T) {
+	availability.MarkUnavailableForTest(t, nil, []availability.Feature{availability.FeatureVerificationAgent})
+
+	router := buildAgentDownloadRouter(t)
+
+	response := httptest.NewRecorder()
+	router.ServeHTTP(
+		response,
+		httptest.NewRequest(http.MethodGet, "/api/v1/system/verification-agent?arch=amd64", nil),
+	)
+
+	assert.Equal(t, http.StatusBadRequest, response.Code)
+	assert.Contains(t, response.Body.String(), "verification agent is not available on this instance")
 }
