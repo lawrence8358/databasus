@@ -4,6 +4,9 @@
 ;
 ; Silent install:   databasus-setup-<version>-x64.exe /VERYSILENT /SUPPRESSMSGBOXES
 ;                     [/DIR=<install dir>] [/DATADIR=<dir>] [/BACKUPSDIR=<dir>] [/PORT=<port>] [/LOG=<file>]
+;                   Exit code 0: installed and the Web UI answers. 7: a check failed before anything was
+;                   installed (the reason is in the log). 10: files are installed but the service did
+;                   not register or start (the reason is in the log).
 ; Silent uninstall: "<install dir>\unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES [/DELETEDATA]
 
 #ifndef AppVersion
@@ -27,11 +30,10 @@ AppPublisherURL=https://github.com/lawrence8358/databasus
 DefaultDirName={autopf}\Databasus
 DisableProgramGroupPage=yes
 PrivilegesRequired=admin
-; x64os rejects 32-bit Windows and Windows on Arm, which are not supported.
-ArchitecturesAllowed=x64os
+; The supported Windows version and architecture are checked in InitializeSetup, which can say
+; what this computer has; the MinVersion and ArchitecturesAllowed directives show only a generic
+; "does not support the version of Windows" message for both.
 ArchitecturesInstallIn64BitMode=x64os
-; 10.0.14393 is Windows Server 2016 and Windows 10 version 1607.
-MinVersion=10.0.14393
 OutputBaseFilename=databasus-setup-{#AppVersion}-x64
 Compression=lzma2/max
 SolidCompression=yes
@@ -43,14 +45,9 @@ UninstallDisplayIcon={app}\databasus-launcher.exe
 CloseApplications=no
 RestartApplications=no
 
-[Messages]
-WinVersionTooLowError=Databasus requires Windows Server 2016, Windows 10 version 1607 or a newer 64-bit Windows. This computer runs an older version, so Setup cannot continue.
-OnlyOnTheseArchitectures=Databasus can only be installed on 64-bit Windows for x64 processors. This computer has a different processor architecture or runs 32-bit Windows, so Setup cannot continue.
-
 [Files]
-Source: "{#StageDir}\*"; Excludes: "\databasus-launcher.exe"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-; Last entry: registering and starting the service needs every other file in place.
-Source: "{#StageDir}\databasus-launcher.exe"; DestDir: "{app}"; Flags: ignoreversion; AfterInstall: InstallAndStartService
+Source: "{#StageDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#StageDir}\databasus-launcher.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 [Registry]
 ; Read back by the uninstaller and by later installers (upgrade keeps these choices).
@@ -63,7 +60,7 @@ Root: HKLM; Subkey: "{#SettingsKey}"; ValueType: string; ValueName: "WebListenHo
 Root: HKLM; Subkey: "{#SettingsKey}"; ValueType: string; ValueName: "Version"; ValueData: "{#AppVersion}"
 
 [Run]
-Filename: "{code:GetWebUiUrl}"; Description: "Open the Databasus Web UI"; Flags: shellexec postinstall skipifsilent nowait runasoriginaluser
+Filename: "{code:GetWebUiUrl}"; Description: "Open the Databasus Web UI"; Flags: shellexec postinstall skipifsilent nowait runasoriginaluser; Check: IsServiceStarted
 
 [UninstallRun]
 Filename: "{app}\databasus-launcher.exe"; Parameters: "uninstall"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveService"
@@ -75,10 +72,14 @@ Type: files; Name: "{app}\ui\build\runtime-config.js"
 [Code]
 const
   ListenHost = '127.0.0.1';
+  { Windows Server 2016 and Windows 10 version 1607 }
+  MinimumWindowsBuild = 14393;
   ServiceStartTimeoutSeconds = 300;
   ServiceStopTimeoutSeconds = 180;
+  ServiceFailedExitCode = 10;
 
 var
+  ServiceFailure: String;
   FoldersPage: TInputDirWizardPage;
   PortPage: TInputQueryWizardPage;
   IsLauncherExtracted: Boolean;
@@ -204,6 +205,48 @@ begin
   end;
 end;
 
+{ ---------- supported systems ---------- }
+
+function GetArchitectureName: String;
+begin
+  case ProcessorArchitecture of
+    paX86: Result := '32-bit (x86)';
+    paX64: Result := 'x64';
+    paArm32: Result := 'ARM';
+    paArm64: Result := 'ARM64';
+  else
+    Result := 'unknown';
+  end;
+end;
+
+function GetUnsupportedSystemReason: String;
+var
+  Version: TWindowsVersion;
+begin
+  Result := '';
+  GetWindowsVersionEx(Version);
+
+  if not IsX64OS then
+    Result := 'Databasus can only be installed on 64-bit Windows for x64 processors. ' +
+      'This computer runs Windows for ' + GetArchitectureName + ' processors.'
+  else if (Version.Major < 10) or ((Version.Major = 10) and (Version.Build < MinimumWindowsBuild)) then
+    Result := 'Databasus requires Windows Server 2016, Windows 10 version 1607 or newer. ' +
+      Format('This computer runs Windows %d.%d (build %d).', [Version.Major, Version.Minor, Version.Build]);
+end;
+
+function InitializeSetup: Boolean;
+var
+  Reason: String;
+begin
+  Reason := GetUnsupportedSystemReason;
+  Result := Reason = '';
+  if not Result then
+  begin
+    Log('Unsupported system: ' + Reason);
+    SuppressibleMsgBox(Reason + #13#10 + #13#10 + 'Setup cannot continue.', mbCriticalError, MB_OK, IDOK);
+  end;
+end;
+
 { ---------- wizard ---------- }
 
 procedure InitializeWizard;
@@ -307,10 +350,25 @@ begin
   end;
 end;
 
+{ Inno Setup cannot roll back from the post-install step, so a failure keeps the files (the admin
+  can read the logs and fix the cause), tells why, and makes Setup exit with ServiceFailedExitCode. }
 procedure FailInstall(const Message: String);
 begin
-  Log('Install failed: ' + Message);
-  RaiseException(Message);
+  ServiceFailure := Message;
+  Log('Service setup failed: ' + Message);
+  SuppressibleMsgBox(Message, mbCriticalError, MB_OK, IDOK);
+end;
+
+function IsServiceStarted: Boolean;
+begin
+  Result := ServiceFailure = '';
+end;
+
+function GetCustomSetupExitCode: Integer;
+begin
+  Result := 0;
+  if ServiceFailure <> '' then
+    Result := ServiceFailedExitCode;
 end;
 
 procedure InstallAndStartService;
@@ -326,7 +384,10 @@ begin
   Params := 'install -data-dir "' + GetDataDir('') + '" -backups-dir "' + GetBackupsDir('') + '"' +
     ' -listen-host ' + ListenHost + ' -port ' + GetPort('');
   if RunAndCapture(ExpandConstant('{app}\databasus-launcher.exe'), Params, Output) <> 0 then
+  begin
     FailInstall('Registering the Databasus service failed:' + #13#10 + Output);
+    exit;
+  end;
 
   WizardForm.StatusLabel.Caption := 'Starting the Databasus service (the first start takes up to a few minutes)...';
   if RunAndCapture(ExpandConstant('{sys}\sc.exe'), 'start {#ServiceName}', Output) <> 0 then
@@ -334,6 +395,7 @@ begin
     if not WasServiceInstalled then
       RunAndCapture(ExpandConstant('{app}\databasus-launcher.exe'), 'uninstall', Output);
     FailInstall('Starting the Databasus service failed:' + #13#10 + Output + LogsHint);
+    exit;
   end;
 
   Waited := 0;
@@ -345,11 +407,18 @@ begin
         RunAndCapture(ExpandConstant('{app}\databasus-launcher.exe'), 'uninstall', Output);
       FailInstall('The Databasus service did not answer on ' + GetWebUiUrl('') + ' within ' +
         IntToStr(ServiceStartTimeoutSeconds) + ' seconds.' + LogsHint);
+      exit;
     end;
     Sleep(2000);
     Waited := Waited + 2;
   end;
   Log('The Web UI answers on ' + GetWebUiUrl(''));
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then
+    InstallAndStartService;
 end;
 
 { ---------- uninstall ---------- }
@@ -379,9 +448,10 @@ begin
     (Normalized <> Lowercase(GetEnv('SystemDrive') + '\users'));
 end;
 
-function InitializeUninstall: Boolean;
+{ Runs after the "remove Databasus?" confirmation and before anything is removed, while the
+  settings key still exists. }
+procedure AskWhetherToDeleteData;
 begin
-  Result := True;
   RegQueryStringValue(HKLM, '{#SettingsKey}', 'DataDir', UninstallDataDir);
   RegQueryStringValue(HKLM, '{#SettingsKey}', 'BackupsDir', UninstallBackupsDir);
 
@@ -416,6 +486,11 @@ begin
   end;
   if DirExists(Folder) and not DelTree(Folder, True, True, True) then
     Log('Could not delete all of ' + Folder);
+end;
+
+procedure InitializeUninstallProgressForm;
+begin
+  AskWhetherToDeleteData;
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
