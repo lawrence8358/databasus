@@ -1,41 +1,12 @@
 package usecases_physical_postgresql
 
 import (
-	"strings"
-	"syscall"
 	"testing"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	postgresql_physical "databasus-backend/internal/features/databases/databases/postgresql/physical"
 	postgresql_shared "databasus-backend/internal/features/databases/databases/postgresql/shared"
 )
-
-func Test_NewReceivewalCommand_SetsParentDeathSignalAndApplicationName(t *testing.T) {
-	databaseID := uuid.New()
-	sourceDB := &postgresql_physical.PostgresqlPhysicalDatabase{
-		DatabaseID:          &databaseID,
-		Host:                "localhost",
-		Port:                5432,
-		Username:            "replicator",
-		ReplicationSlotName: "slot",
-	}
-
-	cmd, err := newReceivewalCommand(t.Context(), receivewalCommandSpec{
-		PgBin:    "sh",
-		SourceDB: sourceDB,
-		Creds:    &postgresql_shared.CredentialTempFiles{PgpassPath: "/tmp/pgpass"},
-		WatchDir: t.TempDir(),
-		SlotName: "slot",
-	})
-	require.NoError(t, err)
-	require.NotNil(t, cmd.SysProcAttr)
-	require.Equal(t, syscall.SIGTERM, cmd.SysProcAttr.Pdeathsig)
-
-	applicationName := "PGAPPNAME=" + receivewalApplicationNamePrefix + databaseID.String()
-	require.True(t, strings.Contains(strings.Join(cmd.Env, "\n"), applicationName))
-}
 
 func Test_IsFatalReceivewalError_ClassifiesNonRetryableStderr(t *testing.T) {
 	fatal := []string{

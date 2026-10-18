@@ -10,8 +10,8 @@ but which nothing enforces while you are assembling the bundle.
 
 The backend resolves a binary as
 `assets/tools/<arch>/<engine>/<engine>-<bundle>/bin/<command>`, where `<arch>`
-is `x64` for `linux/amd64` and `arm` for `linux/arm64`. The mapping lives in
-`backend/internal/util/tools/paths.go`.
+is `x64` for `linux/amd64`, `arm` for `linux/arm64` and `win-x64` for
+`windows/amd64`. The mapping lives in `backend/internal/util/tools/paths.go`.
 
 ## Before adding a version
 

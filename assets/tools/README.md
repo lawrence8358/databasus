@@ -28,6 +28,20 @@ assets/tools/<arch>/
 |-------------------|-------|---------|
 | `linux` / `amd64` | `x64` | ~157 MB |
 | `linux` / `arm64` | `arm` | ~146 MB |
+| `windows` / `amd64` | `win-x64` | ~12 MB |
+
+The `win-x64` tree differs in shape: it holds only
+`postgresql/postgresql-18/bin/` with `pg_dump.exe`, `pg_restore.exe`,
+`psql.exe` and the DLLs they load. The Windows build runs PostgreSQL logical
+backups only, and that one newest client serves every supported server line,
+so the backend maps every server version to it (see
+`backend/internal/util/tools/postgresql_bundles_windows.go`). The backend adds
+the `.exe` suffix to command names and skips the executable-bit check there.
+`tools/refresh-postgresql-windows-bundle.sh` rebuilds the tree from EDB's
+binaries archive (`postgresql-18.6-1-windows-x64-binaries.zip`, release and
+checksum pinned in the script). The programs also need the Microsoft Visual
+C++ runtime (`VCRUNTIME140.dll`) from the host, which the archive does not
+carry. `.dockerignore` keeps the tree out of the Docker image.
 
 A directory name is a release line, not a patch level: `mysql-26` holds one
 26.x build and serves every MySQL 26.x server, `mariadb-13.0` one 13.0.x build
