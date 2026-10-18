@@ -689,6 +689,12 @@ export const zh: typeof en = {
       question: '确定要取消吗？',
       confirm: '是，取消恢复',
     },
+    olderTargetWarning: {
+      message:
+        '警告：此备份由 PostgreSQL {{clientVersion}} 客户端工具生成，但目标服务器运行的是 PostgreSQL {{targetVersion}}。较新客户端生成的转储在较旧的服务器上可能无法恢复，例如因为旧服务器不认识某些设置。',
+      question: '仍要继续恢复吗？',
+      confirm: '仍然恢复',
+    },
   },
   healthcheck: {
     attempts: {

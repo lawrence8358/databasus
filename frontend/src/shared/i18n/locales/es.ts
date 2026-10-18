@@ -740,6 +740,12 @@ export const es: typeof en = {
       question: '¿Seguro que desea cancelar?',
       confirm: 'Sí, cancelar la restauración',
     },
+    olderTargetWarning: {
+      message:
+        'Advertencia: esta copia se generó con las herramientas cliente de PostgreSQL {{clientVersion}}, pero el servidor de destino ejecuta PostgreSQL {{targetVersion}}. Es posible que un volcado de un cliente más nuevo no se restaure en un servidor más antiguo, por ejemplo por ajustes que el servidor antiguo no reconoce.',
+      question: '¿Desea restaurar de todos modos?',
+      confirm: 'Restaurar de todos modos',
+    },
   },
   healthcheck: {
     attempts: {
