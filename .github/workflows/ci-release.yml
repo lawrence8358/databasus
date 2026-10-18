@@ -460,6 +460,12 @@ jobs:
         shell: pwsh
         run: ./e2e/windows-installer/run.ps1 -InstallerPath (Get-Item packaging/windows/out/databasus-setup-*.exe).FullName
 
+      # LAN access over HTTPS: self-signed and imported certificates, firewall rule, upgrade keeps the
+      # choice, /LOCALONLY and uninstall remove the rule.
+      - name: Run the installer LAN access test
+        shell: pwsh
+        run: ./e2e/windows-installer/lan-access.ps1 -InstallerPath (Get-Item packaging/windows/out/databasus-setup-*.exe).FullName
+
   # Installs the previous release's installer, creates data and a backup, then installs this
   # commit's installer over it and checks the data, schedule and backup survive and the old backup
   # restores (e2e/windows-installer/upgrade.ps1). The previous release is the newest v* tag that

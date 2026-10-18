@@ -71,6 +71,18 @@ all, the launcher resets its WAL once, as the Docker image does. `-backups-dir` 
 4005, as in Docker). The other backend settings, such as `SMTP_HOST`, are read from the
 environment as usual.
 
+A listen host other than loopback needs `-https`: the launcher refuses plain HTTP there. Store the
+certificate first, then run with it:
+
+> databasus-launcher.exe tls-setup -data-dir C:\ProgramData\Databasus -source self-signed
+>
+> databasus-launcher.exe -data-dir C:\ProgramData\Databasus -listen-host "" -https
+
+`tls-setup -source pfx -pfx <file>` imports a PFX instead (its password from
+`DATABASUS_PFX_PASSWORD`), and `-source existing` checks the stored one. The PEM files land in
+`<data-dir>\tls` with a restricted ACL, and reach the backend as `DATABASUS_TLS_CERT_FILE` and
+`DATABASUS_TLS_KEY_FILE`; with both set, the backend serves HTTPS only on its one listener.
+
 To run Databasus as a Windows service instead, register it from an administrator prompt with the
 same flags; they are stored, as absolute paths, in the service's command line:
 

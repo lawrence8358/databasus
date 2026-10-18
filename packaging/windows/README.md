@@ -46,6 +46,11 @@ databasus-setup-1.2.3-x64.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG=C:\s
 | `/PORT=` | `4005` |
 | `/EXTERNALDBFILE=` | none (bundled PostgreSQL); a file holding an external metadata database connection string |
 | `/BUNDLEDDB` | switches an install that used an external database back to the bundled one |
+| `/LANACCESS` | off (127.0.0.1 only); opens the Web UI to the local network over HTTPS only |
+| `/PFX=` | with `/LANACCESS`, a PFX certificate file to import |
+| `/PFXPASSWORDFILE=` | a file whose first line is the PFX password |
+| `/SELFSIGNED` | with `/LANACCESS`, generates a new self-signed certificate |
+| `/LOCALONLY` | switches an install with LAN access back to 127.0.0.1 |
 
 ### External metadata database
 
@@ -59,6 +64,33 @@ process; either way the launcher stores it in `<data dir>\external-metadata-db.d
 limited to SYSTEM, Administrators and the installing account, and the service command line only names
 that file. An upgrade keeps the choice; leave the field empty to keep the stored string.
 
+### LAN access over HTTPS
+
+By default the Web UI listens on `127.0.0.1` only. The wizard's "Network access" page, or
+`/LANACCESS` in silent mode, lets other computers open it: the service then listens on every
+interface (IPv4 and IPv6) and speaks HTTPS only on the Web UI port. There is no plain HTTP listener;
+an `http://` request to that port gets `400 Client sent an HTTP request to an HTTPS server`. The
+launcher refuses to start on a non-loopback address without HTTPS.
+
+The certificate is one of:
+
+- a PFX file, for example one issued by your organization (`/PFX=<file>`). Setup checks it before
+  installing anything (wrong password, no private key, expired, or not for server authentication:
+  exit code `7` when silent). The password is never accepted on the command line, because Setup logs
+  its command line: type it on the page, or give `/PFXPASSWORDFILE=<file>`.
+- a self-signed certificate Setup generates (`/SELFSIGNED`), valid for 5 years, for `localhost`, the
+  computer name, its DNS name and its current IP addresses. Browsers warn until it is trusted; the
+  Setup log shows its SHA-256 fingerprint so users can compare it.
+- the certificate already stored, which is the default when it is still valid. Without one, silent
+  mode generates a self-signed certificate.
+
+Setup stores the certificate chain and key as PEM in `<data dir>\tls\databasus.crt` and
+`databasus.key`, with an ACL limited to SYSTEM, Administrators and the installing account, and adds
+the inbound Windows Firewall rule `Databasus Web UI` for the port and `databasus.exe`, on the domain
+and private profiles (add the public profile yourself if the server's network is classified public).
+`/LOCALONLY`, or unchecking the option on a rerun, removes the rule; the uninstaller removes it too.
+To replace an expiring certificate, run Setup again with `/LANACCESS /PFX=...` or `/SELFSIGNED`.
+
 Exit codes: `0` installed and the Web UI answers; `1` unsupported system or invalid folder;
 `7` a check failed before anything was installed; `10` the files are installed but the service did
 not register or start. The reason is in the `/LOG` file, and for `10` also in
@@ -69,7 +101,8 @@ not register or start. The reason is in the `/LOG` file, and for `10` also in
 Run the new version's `.exe` over the installed one, interactively or with the same silent command
 line minus the folder options. Setup reads the earlier choices from `HKLM\SOFTWARE\Databasus` and
 keeps them without asking again: the program data folder, the backups folder, the Web UI port and
-the metadata database choice (only `/EXTERNALDBFILE` or `/BUNDLEDDB` change the last one;
+the metadata database choice (only `/EXTERNALDBFILE` or `/BUNDLEDDB` change it), LAN access and its
+certificate (only `/LANACCESS`, `/LOCALONLY`, `/PFX` or `/SELFSIGNED` change them;
 `/DATADIR`, `/BACKUPSDIR` and `/PORT` are ignored on an upgrade, because moving the folders would
 start the service on an empty metadata database). The Ready page lists what is kept.
 
@@ -133,3 +166,14 @@ pwsh -File e2e/windows-installer/upgrade.ps1 `
 
 It uses port 4124 for the Web UI and 5498 for the throwaway source server, keeps backups in
 `<data dir>\backups`, and leaves the program data folder behind like `run.ps1`.
+
+`e2e/windows-installer/lan-access.ps1` checks the LAN access option: an install with a self-signed
+certificate listens on every interface, answers HTTPS on the computer's network address and not
+plain HTTP, has the firewall rule and a restricted private key; a rerun with `/PFX` serves the
+imported certificate, a rerun without options keeps it, `/LOCALONLY` goes back to `127.0.0.1` and
+removes the rule, and the uninstaller removes the rule. It needs an elevated PowerShell 7, uses port
+4125 and `C:\ProgramData\Databasus-lan-test`, and deletes that folder at the end.
+
+```powershell
+pwsh -File e2e/windows-installer/lan-access.ps1 -InstallerPath databasus-setup-1.2.3-x64.exe
+```
