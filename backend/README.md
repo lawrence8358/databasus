@@ -39,3 +39,28 @@ To apply or roll back migrations on the dev database, with the variables from `.
 Swagger URL is:
 
 > http://localhost:4005/api/v1/docs/swagger/index.html#/
+
+# Run natively on Windows
+
+The backend also builds as a Windows x64 executable, for the fork's Windows installer. It runs
+PostgreSQL logical backups only; the other engines and the physical backup features report as
+unavailable. From `backend/`, after generating the swagger docs:
+
+> GOOS=windows GOARCH=amd64 go build -o databasus.exe ./cmd
+
+Put `migrations/`, `assets/tools/win-x64/` (as `assets/tools/win-x64/`) and, for the Web UI, the
+built frontend (as `ui/build/`) next to `databasus.exe`; it finds them relative to its own location,
+not the working directory. Then point it at an existing PostgreSQL for metadata and start it:
+
+> set ENV_MODE=production
+>
+> set DATABASE_DSN=host=127.0.0.1 port=5432 user=postgres password=... dbname=databasus sslmode=disable
+>
+> set DATABASUS_DATA_DIR=C:\ProgramData\Databasus
+>
+> set DATABASUS_BACKUPS_DIR=D:\DatabasusBackups
+>
+> databasus.exe
+
+The client tools need the Microsoft Visual C++ runtime (`VCRUNTIME140.dll`), which most Windows
+machines already have.
