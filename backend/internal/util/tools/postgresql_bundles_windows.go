@@ -21,3 +21,16 @@ func getPostgresqlBundleVersion(_ PostgresqlVersion) PostgresqlVersion {
 func getPostgresqlRequiredForVersion(_ PostgresqlVersion) []string {
 	return postgresqlRequired
 }
+
+// The metadata database is pinned to one major so an upgrade of Databasus only swaps binaries. It
+// shares the client bundle while both are on the same major; moving the clients to a newer major
+// leaves this constant behind until a planned pg_upgrade of the metadata data directory.
+const metadataPostgresqlVersion = PostgresqlVersion18
+
+func GetMetadataPostgresqlVersion() PostgresqlVersion {
+	return metadataPostgresqlVersion
+}
+
+func GetMetadataPostgresqlBinDir() string {
+	return getPostgresqlBinDir(metadataPostgresqlVersion)
+}
