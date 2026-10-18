@@ -12,6 +12,13 @@
 ;                   metadata database (the string itself is not accepted on the command line, because
 ;                   Setup logs its command line); /BUNDLEDDB switches back to the bundled one. An upgrade
 ;                   keeps the earlier choice unless one of them is given.
+;                   [/LANACCESS [/PFX=<file> [/PFXPASSWORDFILE=<file>] | /SELFSIGNED]] [/LOCALONLY]
+;                   /LANACCESS opens the Web UI to the local network over HTTPS only and allows its port
+;                   in Windows Firewall. The certificate comes from /PFX (its password is read from
+;                   /PFXPASSWORDFILE, never from the command line), or a new self-signed one with
+;                   /SELFSIGNED; with neither, an earlier valid certificate is kept or a self-signed one
+;                   is generated. /LOCALONLY switches back to 127.0.0.1. An upgrade keeps the earlier
+;                   choice and certificate unless one of them is given.
 ; Silent uninstall: "<install dir>\unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES [/DELETEDATA]
 
 #ifndef AppVersion
@@ -24,6 +31,7 @@
 #define ServiceName "Databasus"
 #define SettingsKey "SOFTWARE\Databasus"
 #define DefaultPort "4005"
+#define FirewallRuleName "Databasus Web UI"
 
 [Setup]
 AppId={{5BAD0061-73B2-4D9C-A2F3-CEF52B7FAAE1}
@@ -62,6 +70,7 @@ Root: HKLM; Subkey: "{#SettingsKey}"; ValueType: string; ValueName: "DataDir"; V
 Root: HKLM; Subkey: "{#SettingsKey}"; ValueType: string; ValueName: "BackupsDir"; ValueData: "{code:GetBackupsDir}"
 Root: HKLM; Subkey: "{#SettingsKey}"; ValueType: string; ValueName: "WebPort"; ValueData: "{code:GetPort}"
 Root: HKLM; Subkey: "{#SettingsKey}"; ValueType: string; ValueName: "WebListenHost"; ValueData: "{code:GetListenHost}"
+Root: HKLM; Subkey: "{#SettingsKey}"; ValueType: string; ValueName: "WebLanAccess"; ValueData: "{code:GetLanAccessFlag}"
 Root: HKLM; Subkey: "{#SettingsKey}"; ValueType: string; ValueName: "ExternalMetadataDb"; ValueData: "{code:GetExternalDbFlag}"
 Root: HKLM; Subkey: "{#SettingsKey}"; ValueType: string; ValueName: "Version"; ValueData: "{#AppVersion}"
 
@@ -70,6 +79,8 @@ Filename: "{code:GetWebUiUrl}"; Description: "Open the Databasus Web UI"; Flags:
 
 [UninstallRun]
 Filename: "{app}\databasus-launcher.exe"; Parameters: "uninstall"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveService"
+; Added by Setup when LAN access is on; deleting a rule that does not exist only fails quietly.
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""{#FirewallRuleName}"""; Flags: runhidden waituntilterminated; RunOnceId: "RemoveFirewallRule"
 
 [UninstallDelete]
 ; Written by the launcher at every start.
@@ -92,6 +103,16 @@ var
   UninstallDataDir: String;
   UninstallBackupsDir: String;
   IsDeleteDataRequested: Boolean;
+
+{ ---------- LAN access: the choice the settings below depend on ---------- }
+
+var
+  LanAccessCheckBox: TNewCheckBox;
+
+function IsLanAccessChosen: Boolean;
+begin
+  Result := LanAccessCheckBox.Checked;
+end;
 
 { ---------- settings ---------- }
 
@@ -116,14 +137,22 @@ begin
   Result := Trim(PortPage.Values[0]);
 end;
 
+{ An empty host makes the service listen on every interface (IPv4 and IPv6). }
 function GetListenHost(Param: String): String;
 begin
-  Result := ListenHost;
+  if IsLanAccessChosen then
+    Result := ''
+  else
+    Result := ListenHost;
 end;
 
+{ With LAN access the Web UI speaks HTTPS only; localhost is one of the self-signed certificate's names. }
 function GetWebUiUrl(Param: String): String;
 begin
-  Result := 'http://' + ListenHost + ':' + GetPort('') + '/';
+  if IsLanAccessChosen then
+    Result := 'https://localhost:' + GetPort('') + '/'
+  else
+    Result := 'http://' + ListenHost + ':' + GetPort('') + '/';
 end;
 
 function IsServiceInstalled: Boolean;
@@ -405,6 +434,306 @@ begin
   ExternalDbCheckBoxClick(nil);
 end;
 
+{ ---------- LAN access and HTTPS ---------- }
+
+{ With LAN access the service listens on every interface and serves HTTPS only. The launcher
+  stores the certificate under the data folder (tls-setup), restricted to the service account,
+  SYSTEM and Administrators. A PFX password never goes on a command line (visible to other users,
+  written to the Setup log): it reaches the launcher through an environment variable of this
+  process. The firewall rule is Setup's own, found by name, and the uninstaller deletes it. }
+const
+  PfxPasswordEnvVariable = 'DATABASUS_PFX_PASSWORD';
+
+var
+  LanAccessPage: TWizardPage;
+  CertKeepRadio: TNewRadioButton;
+  CertSelfSignedRadio: TNewRadioButton;
+  CertPfxRadio: TNewRadioButton;
+  PfxFileEdit: TNewEdit;
+  PfxBrowseButton: TNewButton;
+  PfxPasswordEdit: TPasswordEdit;
+  { Summary line of a usable certificate already in the data folder, '' when there is none. }
+  ExistingCertificate: String;
+  PfxPasswordFileProblem: String;
+
+function IsLanSwitchGiven(const Switch: String): Boolean;
+var
+  I: Integer;
+begin
+  Result := False;
+  for I := 1 to ParamCount do
+    if CompareText(ParamStr(I), Switch) = 0 then
+      Result := True;
+end;
+
+function GetLanAccessFlag(Param: String): String;
+begin
+  if IsLanAccessChosen then
+    Result := '1'
+  else
+    Result := '0';
+end;
+
+function RunTlsSetup(const Launcher, Params: String; var Output: String): Integer;
+begin
+  if CertPfxRadio.Checked then
+    SetEnvironmentVariable(PfxPasswordEnvVariable, PfxPasswordEdit.Text);
+  try
+    Result := RunAndCapture(Launcher, 'tls-setup -data-dir "' + GetDataDir('') + '" ' + Params, Output);
+  finally
+    SetEnvironmentVariable(PfxPasswordEnvVariable, '');
+  end;
+end;
+
+procedure FindExistingCertificate;
+var
+  Output: String;
+begin
+  ExistingCertificate := '';
+  if RunTlsSetup(GetLauncherForChecks, '-source existing', Output) = 0 then
+    ExistingCertificate := Trim(Output);
+end;
+
+procedure UpdateLanAccessControls;
+var
+  IsOn: Boolean;
+begin
+  IsOn := IsLanAccessChosen;
+  CertKeepRadio.Enabled := IsOn and (ExistingCertificate <> '');
+  CertSelfSignedRadio.Enabled := IsOn;
+  CertPfxRadio.Enabled := IsOn;
+  PfxFileEdit.Enabled := IsOn and CertPfxRadio.Checked;
+  PfxBrowseButton.Enabled := PfxFileEdit.Enabled;
+  PfxPasswordEdit.Enabled := PfxFileEdit.Enabled;
+end;
+
+{ Keeps a usable stored certificate by default, and otherwise generates a self-signed one. }
+procedure SelectDefaultCertificateSource;
+begin
+  if CertKeepRadio.Checked and (ExistingCertificate = '') then
+    CertKeepRadio.Checked := False;
+  if not (CertKeepRadio.Checked or CertSelfSignedRadio.Checked or CertPfxRadio.Checked) then
+  begin
+    if ExistingCertificate <> '' then
+      CertKeepRadio.Checked := True
+    else
+      CertSelfSignedRadio.Checked := True;
+  end;
+end;
+
+{ The data folder is chosen on an earlier page, so the stored certificate is looked up here. }
+procedure LanAccessPageActivate(Sender: TWizardPage);
+begin
+  FindExistingCertificate;
+  if ExistingCertificate <> '' then
+    CertKeepRadio.Caption := 'Keep the current certificate (the Setup log shows its details)'
+  else
+    CertKeepRadio.Caption := 'Keep the current certificate (none is stored yet)';
+  SelectDefaultCertificateSource;
+  UpdateLanAccessControls;
+end;
+
+procedure LanAccessControlClick(Sender: TObject);
+begin
+  UpdateLanAccessControls;
+end;
+
+procedure PfxBrowseButtonClick(Sender: TObject);
+var
+  FileName: String;
+begin
+  FileName := PfxFileEdit.Text;
+  if GetOpenFileName('Select the PFX certificate file', FileName, '',
+    'PFX certificates (*.pfx;*.p12)|*.pfx;*.p12|All files|*.*', 'pfx') then
+    PfxFileEdit.Text := FileName;
+end;
+
+{ Silent mode has no page to activate: /PFX imports a file, /SELFSIGNED generates a new
+  certificate, and otherwise a usable stored certificate is kept. }
+procedure ChooseSilentCertificateSource;
+var
+  PasswordFile: String;
+  Lines: TArrayOfString;
+begin
+  if not IsLanAccessChosen then
+    exit;
+  FindExistingCertificate;
+  PfxFileEdit.Text := ExpandConstant('{param:PFX|}');
+  if PfxFileEdit.Text <> '' then
+  begin
+    CertPfxRadio.Checked := True;
+    PasswordFile := ExpandConstant('{param:PFXPASSWORDFILE|}');
+    if PasswordFile <> '' then
+    begin
+      if LoadStringsFromFile(PasswordFile, Lines) then
+      begin
+        if GetArrayLength(Lines) > 0 then
+          PfxPasswordEdit.Text := Lines[0];
+      end
+      else
+        PfxPasswordFileProblem := 'The PFX password file ' + PasswordFile + ' cannot be read.';
+    end;
+  end
+  else if IsLanSwitchGiven('/SELFSIGNED') then
+    CertSelfSignedRadio.Checked := True;
+  SelectDefaultCertificateSource;
+end;
+
+{ Returns the problem in words for the person running Setup, or '' when LAN access is off or the
+  chosen certificate can be used. Stores nothing. }
+function CheckLanAccess: String;
+var
+  Output: String;
+begin
+  Result := '';
+  if not IsLanAccessChosen then
+    exit;
+
+  if CertKeepRadio.Checked and (ExistingCertificate = '') then
+    Result := 'No usable HTTPS certificate is stored in the data folder. Generate or import one.'
+  else if CertPfxRadio.Checked then
+  begin
+    if PfxPasswordFileProblem <> '' then
+      Result := PfxPasswordFileProblem
+    else if Trim(PfxFileEdit.Text) = '' then
+      Result := 'Choose the PFX certificate file to import.'
+    else if not FileExists(Trim(PfxFileEdit.Text)) then
+      Result := 'The PFX certificate file ' + Trim(PfxFileEdit.Text) + ' does not exist.'
+    else if RunTlsSetup(GetLauncherForChecks,
+      '-source pfx -check-only -pfx "' + Trim(PfxFileEdit.Text) + '"', Output) <> 0 then
+    begin
+      Result := Trim(Output);
+      if Result = '' then
+        Result := 'The PFX certificate file cannot be used.';
+    end;
+  end;
+  if Result <> '' then
+    Result := Result + #13#10 + #13#10 + 'Nothing has been installed.';
+end;
+
+function RunNetsh(const Params: String; var Output: String): Integer;
+begin
+  Result := RunAndCapture(ExpandConstant('{sys}\netsh.exe'), 'advfirewall firewall ' + Params, Output);
+end;
+
+{ Stores the certificate and opens the port in Windows Firewall, or, with LAN access off, removes
+  the rule an earlier install added. A stored certificate stays in the data folder either way. }
+function ApplyLanAccess(var Failure: String): Boolean;
+var
+  Source, Output: String;
+begin
+  Result := True;
+  Failure := '';
+  WizardForm.StatusLabel.Caption := 'Configuring network access...';
+  { Fails when there is no rule; it is added again below with the current port. }
+  RunNetsh('delete rule name="{#FirewallRuleName}"', Output);
+  if not IsLanAccessChosen then
+    exit;
+
+  if CertPfxRadio.Checked then
+    Source := '-source pfx -pfx "' + Trim(PfxFileEdit.Text) + '"'
+  else if CertSelfSignedRadio.Checked then
+    Source := '-source self-signed'
+  else
+    Source := '-source existing';
+  if RunTlsSetup(ExpandConstant('{app}\databasus-launcher.exe'), Source, Output) <> 0 then
+  begin
+    Failure := 'Storing the HTTPS certificate failed:' + #13#10 + Output;
+    Result := False;
+    exit;
+  end;
+  Log('HTTPS certificate: ' + Trim(Output));
+
+  if RunNetsh('add rule name="{#FirewallRuleName}" dir=in action=allow protocol=TCP localport=' +
+    GetPort('') + ' program="' + ExpandConstant('{app}\databasus.exe') + '" profile=domain,private enable=yes',
+    Output) <> 0 then
+  begin
+    Failure := 'Allowing port ' + GetPort('') + ' in Windows Firewall failed:' + #13#10 + Output;
+    Result := False;
+  end;
+end;
+
+procedure CreateLanAccessPage(const AfterPageId: Integer);
+var
+  Description, CertificateLabel, PasswordLabel: TNewStaticText;
+begin
+  LanAccessPage := CreateCustomPage(AfterPageId,
+    'Network access', 'Who should be able to open the Databasus Web UI?');
+  LanAccessPage.OnActivate := @LanAccessPageActivate;
+
+  LanAccessCheckBox := TNewCheckBox.Create(LanAccessPage);
+  LanAccessCheckBox.Parent := LanAccessPage.Surface;
+  LanAccessCheckBox.Width := LanAccessPage.SurfaceWidth;
+  LanAccessCheckBox.Caption := 'Allow other computers on the local network (HTTPS only)';
+  LanAccessCheckBox.OnClick := @LanAccessControlClick;
+
+  Description := TNewStaticText.Create(LanAccessPage);
+  Description.Parent := LanAccessPage.Surface;
+  Description.Top := LanAccessCheckBox.Top + LanAccessCheckBox.Height + ScaleY(4);
+  Description.WordWrap := True;
+  Description.Width := LanAccessPage.SurfaceWidth;
+  Description.Caption :=
+    'The Web UI then listens on every network adapter without plain HTTP, and Setup allows its port in ' +
+    'Windows Firewall for domain and private networks. Unchecked, only this computer can open it.';
+
+  CertificateLabel := TNewStaticText.Create(LanAccessPage);
+  CertificateLabel.Parent := LanAccessPage.Surface;
+  CertificateLabel.Top := Description.Top + Description.Height + ScaleY(10);
+  CertificateLabel.Caption := 'HTTPS certificate:';
+
+  CertKeepRadio := TNewRadioButton.Create(LanAccessPage);
+  CertKeepRadio.Parent := LanAccessPage.Surface;
+  CertKeepRadio.Top := CertificateLabel.Top + CertificateLabel.Height + ScaleY(4);
+  CertKeepRadio.Width := LanAccessPage.SurfaceWidth;
+  CertKeepRadio.Caption := 'Keep the current certificate';
+  CertKeepRadio.OnClick := @LanAccessControlClick;
+
+  CertSelfSignedRadio := TNewRadioButton.Create(LanAccessPage);
+  CertSelfSignedRadio.Parent := LanAccessPage.Surface;
+  CertSelfSignedRadio.Top := CertKeepRadio.Top + CertKeepRadio.Height + ScaleY(3);
+  CertSelfSignedRadio.Width := LanAccessPage.SurfaceWidth;
+  CertSelfSignedRadio.Caption := 'Generate a self-signed certificate (browsers warn until it is trusted)';
+  CertSelfSignedRadio.OnClick := @LanAccessControlClick;
+
+  CertPfxRadio := TNewRadioButton.Create(LanAccessPage);
+  CertPfxRadio.Parent := LanAccessPage.Surface;
+  CertPfxRadio.Top := CertSelfSignedRadio.Top + CertSelfSignedRadio.Height + ScaleY(3);
+  CertPfxRadio.Width := LanAccessPage.SurfaceWidth;
+  CertPfxRadio.Caption := 'Import a PFX file, for example one issued by your organization:';
+  CertPfxRadio.OnClick := @LanAccessControlClick;
+
+  PfxBrowseButton := TNewButton.Create(LanAccessPage);
+  PfxBrowseButton.Parent := LanAccessPage.Surface;
+  PfxBrowseButton.Width := ScaleX(75);
+  PfxBrowseButton.Height := ScaleY(23);
+  PfxBrowseButton.Top := CertPfxRadio.Top + CertPfxRadio.Height + ScaleY(4);
+  PfxBrowseButton.Left := LanAccessPage.SurfaceWidth - PfxBrowseButton.Width;
+  PfxBrowseButton.Caption := 'Browse...';
+  PfxBrowseButton.OnClick := @PfxBrowseButtonClick;
+
+  PfxFileEdit := TNewEdit.Create(LanAccessPage);
+  PfxFileEdit.Parent := LanAccessPage.Surface;
+  PfxFileEdit.Left := ScaleX(16);
+  PfxFileEdit.Top := PfxBrowseButton.Top + ScaleY(1);
+  PfxFileEdit.Width := PfxBrowseButton.Left - PfxFileEdit.Left - ScaleX(8);
+
+  PasswordLabel := TNewStaticText.Create(LanAccessPage);
+  PasswordLabel.Parent := LanAccessPage.Surface;
+  PasswordLabel.Left := ScaleX(16);
+  PasswordLabel.Top := PfxBrowseButton.Top + PfxBrowseButton.Height + ScaleY(9);
+  PasswordLabel.Caption := 'PFX password:';
+
+  PfxPasswordEdit := TPasswordEdit.Create(LanAccessPage);
+  PfxPasswordEdit.Parent := LanAccessPage.Surface;
+  PfxPasswordEdit.Left := PfxFileEdit.Left + ScaleX(90);
+  PfxPasswordEdit.Top := PasswordLabel.Top - ScaleY(3);
+  PfxPasswordEdit.Width := PfxFileEdit.Width - ScaleX(90);
+
+  LanAccessCheckBox.Checked := IsLanSwitchGiven('/LANACCESS') or
+    ((GetPreviousSetting('WebLanAccess', '0') = '1') and not IsLanSwitchGiven('/LOCALONLY'));
+  UpdateLanAccessControls;
+end;
+
 { ---------- supported systems ---------- }
 
 function GetArchitectureName: String;
@@ -467,11 +796,13 @@ begin
 
   PortPage := CreateInputQueryPage(FoldersPage.ID,
     'Web UI port', 'Which port should the Databasus Web UI use?',
-    'The Web UI listens on 127.0.0.1 only, so it is reachable from this computer and nowhere else.');
+    'By default the Web UI listens on 127.0.0.1 only, so it is reachable from this computer and nowhere else. ' +
+    'The next page can open it to the local network over HTTPS.');
   PortPage.Add('Port:', False);
   PortPage.Values[0] := ExpandConstant('{param:PORT|' + GetPreviousSetting('WebPort', '{#DefaultPort}') + '}');
 
   CreateExternalDbPage(PortPage.ID);
+  CreateLanAccessPage(PortPage.ID);
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
@@ -488,7 +819,9 @@ begin
   else if CurPageID = PortPage.ID then
     Problems := CheckChoices(False, True)
   else if CurPageID = ExternalDbPage.ID then
-    Problems := CheckExternalDb;
+    Problems := CheckExternalDb
+  else if CurPageID = LanAccessPage.ID then
+    Problems := CheckLanAccess;
 
   if Problems <> '' then
   begin
@@ -527,6 +860,11 @@ begin
     Result := CheckChoices(True, True);
     if Result = '' then
       Result := CheckExternalDb;
+    if Result = '' then
+    begin
+      ChooseSilentCertificateSource;
+      Result := CheckLanAccess;
+    end;
     if Result <> '' then
       exit;
   end;
@@ -548,7 +886,10 @@ begin
   try
     Request := CreateOleObject('WinHttp.WinHttpRequest.5.1');
     Request.SetTimeouts(3000, 3000, 3000, 3000);
-    Request.Open('GET', 'http://' + ListenHost + ':' + GetPort('') + '/api/v1/system/version', False);
+    Request.Open('GET', GetWebUiUrl('') + 'api/v1/system/version', False);
+    { This only asks whether the local service is up; a self-signed certificate is expected. }
+    if IsLanAccessChosen then
+      Request.Option[4] := $3300; { WinHttpRequestOption_SslErrorIgnoreFlags: ignore all }
     Request.Send('');
     Result := Request.Status = 200;
   except
@@ -592,9 +933,17 @@ begin
     exit;
   end;
 
+  if not ApplyLanAccess(Output) then
+  begin
+    FailInstall(Output);
+    exit;
+  end;
+
   WizardForm.StatusLabel.Caption := 'Registering the Databasus service...';
   Params := 'install -data-dir "' + GetDataDir('') + '" -backups-dir "' + GetBackupsDir('') + '"' +
-    ' -listen-host ' + ListenHost + ' -port ' + GetPort('');
+    ' -listen-host "' + GetListenHost('') + '" -port ' + GetPort('');
+  if IsLanAccessChosen then
+    Params := Params + ' -https';
   if IsExternalDbChosen then
     Params := Params + ' -external-metadata-db-file "' + GetExternalDbTargetFile + '"';
   if RunAndCapture(ExpandConstant('{app}\databasus-launcher.exe'), Params, Output) <> 0 then
