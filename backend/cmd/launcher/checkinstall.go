@@ -45,7 +45,7 @@ func checkInstall(arguments []string) int {
 	}
 
 	for _, problem := range problems {
-		fmt.Fprintln(os.Stdout, problem)
+		_, _ = fmt.Fprintln(os.Stdout, problem)
 	}
 
 	if len(problems) > 0 {

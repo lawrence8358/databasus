@@ -56,7 +56,7 @@ func Run(ctx context.Context, config Config) error {
 		return fmt.Errorf("backend executable: %w", err)
 	}
 
-	if err := ensureWebPortIsFree(config.WebListenHost, config.WebPort); err != nil {
+	if err := ensureWebPortIsFree(ctx, config.WebListenHost, config.WebPort); err != nil {
 		return err
 	}
 
@@ -119,8 +119,8 @@ func Run(ctx context.Context, config Config) error {
 
 // The backend only logs a failed listen and keeps running without its Web UI, so the launcher
 // refuses to start instead, which surfaces the conflict in the service log and event log.
-func ensureWebPortIsFree(host string, port int) error {
-	listener, err := net.Listen("tcp", net.JoinHostPort(host, strconv.Itoa(port)))
+func ensureWebPortIsFree(ctx context.Context, host string, port int) error {
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", net.JoinHostPort(host, strconv.Itoa(port)))
 	if err != nil {
 		return fmt.Errorf("the Web UI port %d is not available: %w", port, err)
 	}

@@ -3,6 +3,7 @@
 package installcheck
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"strconv"
@@ -16,7 +17,11 @@ func CheckPortIsFree(port int) error {
 	}
 
 	for _, host := range []string{"127.0.0.1", ""} {
-		listener, err := net.Listen("tcp", net.JoinHostPort(host, strconv.Itoa(port)))
+		listener, err := (&net.ListenConfig{}).Listen(
+			context.Background(),
+			"tcp",
+			net.JoinHostPort(host, strconv.Itoa(port)),
+		)
 		if err != nil {
 			return fmt.Errorf("port %d is already in use by another program", port)
 		}

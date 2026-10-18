@@ -57,7 +57,11 @@ func CheckServiceCanWriteFolder(folder string) error {
 	return nil
 }
 
-func checkAccountRights(folder string, account *windows.SID, accountDescription string) (isFolderPresent bool, err error) {
+func checkAccountRights(
+	folder string,
+	account *windows.SID,
+	accountDescription string,
+) (isFolderPresent bool, err error) {
 	existingFolder, isFolderPresent, err := findNearestExistingFolder(folder)
 	if err != nil {
 		return false, err

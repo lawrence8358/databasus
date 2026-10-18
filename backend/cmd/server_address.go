@@ -26,7 +26,11 @@ func getServerAddress() (serverAddress, error) {
 	if rawPort := os.Getenv(portEnvVariable); rawPort != "" {
 		port, err := strconv.Atoi(rawPort)
 		if err != nil || port < 1 || port > 65535 {
-			return serverAddress{}, fmt.Errorf("%s must be a port number from 1 to 65535, got %q", portEnvVariable, rawPort)
+			return serverAddress{}, fmt.Errorf(
+				"%s must be a port number from 1 to 65535, got %q",
+				portEnvVariable,
+				rawPort,
+			)
 		}
 
 		address.port = port
