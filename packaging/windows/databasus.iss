@@ -1018,7 +1018,11 @@ begin
   FoldersPage.Add('Program data folder (metadata database, secret key, logs):');
   FoldersPage.Add('Backups folder (local storage):');
   FoldersPage.Values[0] := ExpandConstant('{param:DATADIR|' + GetPreviousSetting('DataDir', DefaultDataDir) + '}');
-  FoldersPage.Values[1] := ExpandConstant('{param:BACKUPSDIR|' + GetPreviousSetting('BackupsDir', AddBackslash(DefaultDataDir) + 'backups') + '}');
+  { Without /BACKUPSDIR the backups go under the chosen data folder, so /DATADIR alone moves both. }
+  FoldersPage.Values[1] := ExpandConstant('{param:BACKUPSDIR|}');
+  if FoldersPage.Values[1] = '' then
+    FoldersPage.Values[1] := GetPreviousSetting('BackupsDir',
+      AddBackslash(RemoveBackslashUnlessRoot(Trim(FoldersPage.Values[0]))) + 'backups');
 
   PortPage := CreateInputQueryPage(FoldersPage.ID,
     'Web UI port', 'Which port should the Databasus Web UI use?',
