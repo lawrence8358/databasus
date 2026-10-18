@@ -93,9 +93,14 @@ func getSettingsFilePath() (string, bool) {
 }
 
 func buildResponse(settings settingsfile.Settings) *BackupsFolderResponse {
+	previousFolders := settings.PreviousFolders
+	if previousFolders == nil {
+		previousFolders = []string{}
+	}
+
 	return &BackupsFolderResponse{
 		IsChangeable:    true,
 		CurrentFolder:   settings.CurrentFolder,
-		PreviousFolders: settings.PreviousFolders,
+		PreviousFolders: previousFolders,
 	}
 }

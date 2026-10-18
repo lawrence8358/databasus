@@ -62,6 +62,18 @@ func Test_ChangeBackupsFolder_WhenFolderIsValid_CreatesRecordsAndAuditsIt(t *tes
 	assert.Equal(t, response, readBack)
 }
 
+func Test_GetBackupsFolder_WhenNoEarlierFolders_ReturnsEmptyList(t *testing.T) {
+	router := createBackupsFolderTestRouter(t)
+	admin := users_testing.CreateTestUser(t.Context(), users_enums.UserRoleAdmin)
+	enableBackupsFolderSetting(t)
+	backupsfolder.UseSettings(settingsfile.Settings{CurrentFolder: t.TempDir()})
+
+	response := test_utils.MakeGetRequest(t, router, backupsFolderURL, "Bearer "+admin.Token, http.StatusOK)
+
+	assert.Contains(t, string(response.Body), `"previousFolders":[]`)
+	assert.Contains(t, string(response.Body), `"isChangeable":true`)
+}
+
 func Test_ChangeBackupsFolder_WithRefusedFolders_ReturnsBadRequestAndKeepsFolder(t *testing.T) {
 	router := createBackupsFolderTestRouter(t)
 	admin := users_testing.CreateTestUser(t.Context(), users_enums.UserRoleAdmin)
