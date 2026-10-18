@@ -11,6 +11,7 @@ Needs Go 1.26, swag, Node.js with pnpm, and Inno Setup 7.1.0 (`ISCC.exe` on `PAT
 install folder, or passed with `-IsccPath`).
 
 ```powershell
+$env:VITE_APP_VERSION = '1.2.3'   # the version the Web UI shows; without it the UI says "vdev"
 cd frontend; pnpm install --frozen-lockfile; pnpm build; cd ..
 cd backend; swag init -d . -g cmd/main.go -o swagger; cd ..
 pwsh packaging/windows/build.ps1 -Version 1.2.3
