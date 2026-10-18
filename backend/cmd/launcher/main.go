@@ -25,8 +25,8 @@ const usage = `Usage:
   databasus-launcher.exe test-external-db [-file <path>]
                                             check an external metadata database; the connection string
                                             comes from DATABASUS_INSTALLER_EXTERNAL_DB_DSN or -file
-  databasus-launcher.exe save-external-db -data-dir <dir>
-                                            store that connection string under the data folder (restricted ACL)
+  databasus-launcher.exe save-external-db -data-dir <dir> [-file <path>]
+                                            store that connection string (or the one in -file) under the data folder (restricted ACL)
 
 Flags:
 `

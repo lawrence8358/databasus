@@ -44,6 +44,20 @@ databasus-setup-1.2.3-x64.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG=C:\s
 | `/DATADIR=` | `C:\ProgramData\Databasus` (metadata database, secret key, logs) |
 | `/BACKUPSDIR=` | `<data dir>\backups` (local storage; a local disk only) |
 | `/PORT=` | `4005` |
+| `/EXTERNALDBFILE=` | none (bundled PostgreSQL); a file holding an external metadata database connection string |
+| `/BUNDLEDDB` | switches an install that used an external database back to the bundled one |
+
+### External metadata database
+
+The wizard's "Metadata database (advanced)" page, or `/EXTERNALDBFILE=<file>` in silent mode, makes
+Databasus keep its metadata on an existing PostgreSQL server. Setup tests the connection first and
+installs nothing if it fails (exit code `7` when silent). The bundled PostgreSQL is then neither
+initialized nor started. The connection string (`postgres://user:password@host:5432/db` or
+`host=... user=... password=...`) is never accepted on the command line, because Setup logs its
+command line. A typed string reaches the launcher through an environment variable of the Setup
+process; either way the launcher stores it in `<data dir>\external-metadata-db.dsn` with an ACL
+limited to SYSTEM, Administrators and the installing account, and the service command line only names
+that file. An upgrade keeps the choice; leave the field empty to keep the stored string.
 
 Exit codes: `0` installed and the Web UI answers; `1` unsupported system or invalid folder;
 `7` a check failed before anything was installed; `10` the files are installed but the service did

@@ -42,11 +42,12 @@ func testExternalDb(arguments []string) int {
 	return 0
 }
 
-// saveExternalDb stores the connection string from the environment in the data folder, readable
+// saveExternalDb stores the connection string from the environment (or -file) in the data folder, readable
 // only by the service account and administrators.
 func saveExternalDb(arguments []string) int {
 	flags := flag.NewFlagSet("databasus-launcher save-external-db", flag.ContinueOnError)
 	dataFolder := flags.String("data-dir", "", "program data folder the service will use")
+	file := flags.String("file", "", "read the connection string from this file instead of the environment")
 
 	if err := flags.Parse(arguments); err != nil {
 		return 2
@@ -58,7 +59,7 @@ func saveExternalDb(arguments []string) int {
 		return 2
 	}
 
-	dsn, err := readInstallerDsn("")
+	dsn, err := readInstallerDsn(*file)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 
