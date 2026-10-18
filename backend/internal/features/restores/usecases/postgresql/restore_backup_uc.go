@@ -804,9 +804,10 @@ func (uc *RestorePostgresqlBackupUsecase) resolvePgRestoreOutcome(failure pgRest
 	waitErr := failure.waitErr
 	stderr := string(failure.stderrOutput)
 
-	if IsPreexistingPublicSchemaOnly(stderr) {
+	if IsEveryIgnoredRestoreErrorHarmless(stderr) {
 		failure.logger.Warn(
-			"pg_restore ignored a pre-existing public schema; treating the restore as successful",
+			"pg_restore ignored only harmless errors; treating the restore as successful",
+			"stderr", stderr,
 		)
 
 		return nil
