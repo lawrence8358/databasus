@@ -10,47 +10,17 @@ import (
 // Every PostgreSQL client answers --version with "<tool> (PostgreSQL) 17.10".
 var postgresqlVersionPattern = regexp.MustCompile(`\(PostgreSQL\)\s+(\d[\d.]*)`)
 
-var postgresqlVersions = []PostgresqlVersion{
-	PostgresqlVersion12,
-	PostgresqlVersion13,
-	PostgresqlVersion14,
-	PostgresqlVersion15,
-	PostgresqlVersion16,
-	PostgresqlVersion17,
-	PostgresqlVersion18,
-}
-
-var postgresqlRequired = []string{
-	string(PostgresqlExecutablePgDump),
-	string(PostgresqlExecutablePsql),
-}
-
-// postgresqlRequiredV17Plus extends the base set with the physical-backup
-// binaries. pg_basebackup --incremental and pg_combinebackup are PG 17+ only,
-// so pre-17 versions stay on the smaller list.
-var postgresqlRequiredV17Plus = []string{
-	string(PostgresqlExecutablePgDump),
-	string(PostgresqlExecutablePsql),
-	string(PostgresqlExecutablePgBasebackup),
-	string(PostgresqlExecutablePgReceivewal),
-	string(PostgresqlExecutablePgCombinebackup),
-}
-
-func getPostgresqlRequiredForVersion(version PostgresqlVersion) []string {
-	if version == PostgresqlVersion17 || version == PostgresqlVersion18 {
-		return postgresqlRequiredV17Plus
-	}
-
-	return postgresqlRequired
-}
-
-// GetPostgresqlExecutable returns the absolute path to a PostgreSQL client
-// binary for the given version (e.g. pg_dump, pg_restore, psql).
+// GetPostgresqlExecutable returns the absolute path to the PostgreSQL client
+// binary (e.g. pg_dump, pg_restore, psql) that serves a server of the given
+// version.
 func GetPostgresqlExecutable(
-	version PostgresqlVersion,
+	serverVersion PostgresqlVersion,
 	executable PostgresqlExecutable,
 ) string {
-	return filepath.Join(getPostgresqlBinDir(version), string(executable))
+	return getExecutablePath(
+		getPostgresqlBinDir(getPostgresqlBundleVersion(serverVersion)),
+		string(executable),
+	)
 }
 
 func getPostgresqlBinDir(version PostgresqlVersion) string {
@@ -62,13 +32,13 @@ func getPostgresqlBinDir(version PostgresqlVersion) string {
 	)
 }
 
-// checkPostgresql verifies every supported PG version's bin directory. PG is
+// checkPostgresql verifies every bundled PG client's bin directory. PG is
 // fatal-tier — the app reads the version from each managed database and must
-// be able to invoke the matching client.
+// be able to invoke the client that serves it.
 func checkPostgresql() []ToolCheckResult {
-	results := make([]ToolCheckResult, 0, len(postgresqlVersions))
+	results := make([]ToolCheckResult, 0, len(postgresqlBundledVersions))
 
-	for _, v := range postgresqlVersions {
+	for _, v := range postgresqlBundledVersions {
 		binDir := getPostgresqlBinDir(v)
 
 		results = append(results, ToolCheckResult{

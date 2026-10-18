@@ -90,7 +90,7 @@ func GetMariadbExecutable(
 
 	clientVersion := GetMariadbClientVersionForServer(serverVersion)
 
-	return filepath.Join(getMariadbBinDir(clientVersion), string(executable)), nil
+	return getExecutablePath(getMariadbBinDir(clientVersion), string(executable)), nil
 }
 
 // RequireMariadbBundle reports whether this architecture ships the client

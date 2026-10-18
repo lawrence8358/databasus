@@ -68,7 +68,7 @@ func (uc *RestorePostgresqlBackupUsecase) Execute(
 		return fmt.Errorf("target database name is required for pg_restore")
 	}
 
-	pgBin := tools.GetPostgresqlExecutable(pg.Version, "pg_restore")
+	pgBin := tools.GetPostgresqlExecutable(pg.Version, tools.PostgresqlExecutablePgRestore)
 
 	// All PostgreSQL backups are now custom format (-Fc)
 	return uc.restoreCustomType(

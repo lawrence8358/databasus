@@ -111,7 +111,7 @@ func (uc *CreatePostgresqlBackupUsecase) Execute(
 		ctx,
 		backup,
 		backupConfig,
-		tools.GetPostgresqlExecutable(pg.Version, "pg_dump"),
+		tools.GetPostgresqlExecutable(pg.Version, tools.PostgresqlExecutablePgDump),
 		args,
 		decryptedPassword,
 		fileStore,

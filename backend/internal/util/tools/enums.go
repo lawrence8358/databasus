@@ -28,6 +28,7 @@ type PostgresqlExecutable string
 
 const (
 	PostgresqlExecutablePgDump          PostgresqlExecutable = "pg_dump"
+	PostgresqlExecutablePgRestore       PostgresqlExecutable = "pg_restore"
 	PostgresqlExecutablePsql            PostgresqlExecutable = "psql"
 	PostgresqlExecutablePgBasebackup    PostgresqlExecutable = "pg_basebackup"
 	PostgresqlExecutablePgReceivewal    PostgresqlExecutable = "pg_receivewal"

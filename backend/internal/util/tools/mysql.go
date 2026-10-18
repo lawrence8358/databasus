@@ -55,7 +55,7 @@ func GetMysqlExecutable(version MysqlVersion, executable MysqlExecutable) (strin
 		return "", err
 	}
 
-	return filepath.Join(getMysqlBinDir(version), string(executable)), nil
+	return getExecutablePath(getMysqlBinDir(version), string(executable)), nil
 }
 
 // RequireMysqlBundle reports whether this architecture ships a client for the
