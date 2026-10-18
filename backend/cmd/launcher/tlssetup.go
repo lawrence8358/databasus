@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"databasus-backend/internal/launcher/webtls"
+	"databasus-backend/internal/util/securefile"
 )
 
 // The installer passes the PFX password in the environment, so it does not appear on a command
@@ -41,7 +42,7 @@ func setUpTLS(arguments []string) int {
 		return 2
 	}
 
-	summary, err := runTLSSetup(*dataFolder, *source, *pfxFile, *isCheckOnly, time.Now())
+	summary, err := runTLSSetup(*dataFolder, *source, *pfxFile, *isCheckOnly, time.Now().UTC())
 	if err != nil {
 		_, _ = fmt.Fprintln(os.Stdout, err)
 
@@ -56,7 +57,7 @@ func setUpTLS(arguments []string) int {
 func runTLSSetup(dataFolder, source, pfxFile string, isCheckOnly bool, now time.Time) (webtls.Summary, error) {
 	switch source {
 	case tlsSourceSelfSigned:
-		return webtls.GenerateSelfSigned(dataFolder, webtls.DiscoverHostNames(), now)
+		return webtls.GenerateSelfSigned(dataFolder, webtls.DiscoverHostNames(), now, securefile.ServiceOnly)
 	case tlsSourceExisting:
 		return webtls.Check(dataFolder, now)
 	case tlsSourcePfx:
@@ -77,7 +78,7 @@ func runTLSSetup(dataFolder, source, pfxFile string, isCheckOnly bool, now time.
 			return summary, err
 		}
 
-		return webtls.ImportPfx(dataFolder, pfxData, password, now)
+		return webtls.ImportPfx(dataFolder, pfxData, password, now, securefile.ServiceOnly)
 	default:
 		return webtls.Summary{}, fmt.Errorf(
 			"-source must be %s, %s or %s",

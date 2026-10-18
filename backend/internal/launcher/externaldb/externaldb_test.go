@@ -5,12 +5,14 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"databasus-backend/internal/util/securefile"
 )
 
 func Test_SaveThenLoad_ReturnsTrimmedConnectionString(t *testing.T) {
 	folder := t.TempDir()
 
-	require.NoError(t, Save(folder, "  host=db user=u password=secret dbname=d\r\n"))
+	require.NoError(t, Save(folder, "  host=db user=u password=secret dbname=d\r\n", securefile.CurrentAccount))
 
 	dsn, err := Load(GetFilePath(folder))
 	require.NoError(t, err)
@@ -18,7 +20,7 @@ func Test_SaveThenLoad_ReturnsTrimmedConnectionString(t *testing.T) {
 }
 
 func Test_Save_WithEmptyString_ReturnsError(t *testing.T) {
-	require.Error(t, Save(t.TempDir(), "  "))
+	require.Error(t, Save(t.TempDir(), "  ", securefile.CurrentAccount))
 }
 
 func Test_Load_WithBomAndEmptyContent_HandlesBoth(t *testing.T) {

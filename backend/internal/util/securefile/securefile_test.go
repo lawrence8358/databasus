@@ -15,9 +15,9 @@ func Test_WriteFile_ContentRoundTrips_AndOverwriteReplacesIt(t *testing.T) {
 	require.NoError(t, WriteFile(path, []byte("first-value"), 0o600))
 	require.NoError(t, WriteFile(path, []byte("second"), 0o600))
 
-	got, err := os.ReadFile(path)
+	content, err := os.ReadFile(path)
 	require.NoError(t, err)
-	require.Equal(t, "second", string(got))
+	require.Equal(t, "second", string(content))
 }
 
 func Test_WriteFile_OnPosix_ModeIsOwnerOnly(t *testing.T) {

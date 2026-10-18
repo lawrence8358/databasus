@@ -12,6 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"software.sslmate.com/src/go-pkcs12"
+
+	"databasus-backend/internal/util/securefile"
 )
 
 var testNow = time.Date(2026, 10, 18, 12, 0, 0, 0, time.UTC)
@@ -20,7 +22,7 @@ func Test_GenerateSelfSigned_WritesPairThatCheckAccepts(t *testing.T) {
 	dataFolder := t.TempDir()
 	names := HostNames{DNSNames: []string{"localhost", "db-server"}, IPs: []net.IP{net.ParseIP("192.168.1.20")}}
 
-	generated, err := GenerateSelfSigned(dataFolder, names, testNow)
+	generated, err := GenerateSelfSigned(dataFolder, names, testNow, securefile.CurrentAccount)
 	require.NoError(t, err)
 
 	checked, err := Check(dataFolder, testNow)
@@ -41,7 +43,7 @@ func Test_Check_WhenNoCertificateIsStored_ReturnsError(t *testing.T) {
 
 func Test_Check_WhenCertificateHasExpired_ReturnsError(t *testing.T) {
 	dataFolder := t.TempDir()
-	_, err := GenerateSelfSigned(dataFolder, HostNames{DNSNames: []string{"localhost"}}, testNow)
+	_, err := GenerateSelfSigned(dataFolder, HostNames{DNSNames: []string{"localhost"}}, testNow, securefile.CurrentAccount)
 	require.NoError(t, err)
 
 	_, err = Check(dataFolder, testNow.Add(6*365*24*time.Hour))
@@ -53,7 +55,7 @@ func Test_ImportPfx_WhenPfxUsesModernEncryption_StoresChainAndKey(t *testing.T) 
 	dataFolder := t.TempDir()
 	pfxData := createTestPfx(t, "s3cret", testNow)
 
-	summary, err := ImportPfx(dataFolder, pfxData, "s3cret", testNow)
+	summary, err := ImportPfx(dataFolder, pfxData, "s3cret", testNow, securefile.CurrentAccount)
 	require.NoError(t, err)
 
 	files := GetFiles(dataFolder)
@@ -68,10 +70,10 @@ func Test_ImportPfx_WhenPfxUsesModernEncryption_StoresChainAndKey(t *testing.T) 
 
 func Test_ImportPfx_WhenPasswordIsWrong_KeepsPreviousCertificate(t *testing.T) {
 	dataFolder := t.TempDir()
-	previous, err := GenerateSelfSigned(dataFolder, HostNames{DNSNames: []string{"localhost"}}, testNow)
+	previous, err := GenerateSelfSigned(dataFolder, HostNames{DNSNames: []string{"localhost"}}, testNow, securefile.CurrentAccount)
 	require.NoError(t, err)
 
-	_, err = ImportPfx(dataFolder, createTestPfx(t, "s3cret", testNow), "wrong", testNow)
+	_, err = ImportPfx(dataFolder, createTestPfx(t, "s3cret", testNow), "wrong", testNow, securefile.CurrentAccount)
 	assert.ErrorContains(t, err, "wrong password")
 
 	checked, err := Check(dataFolder, testNow)

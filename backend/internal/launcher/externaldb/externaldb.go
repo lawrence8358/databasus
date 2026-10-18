@@ -25,8 +25,8 @@ func GetFilePath(dataFolder string) string {
 	return filepath.Join(dataFolder, FileName)
 }
 
-// Save stores the connection string so that only the service account and administrators can read it.
-func Save(dataFolder, dsn string) error {
+// Save stores the connection string; on Windows only SYSTEM, Administrators and readers can open it.
+func Save(dataFolder, dsn string, readers securefile.Readers) error {
 	dsn = strings.TrimSpace(dsn)
 	if dsn == "" {
 		return errors.New("the connection string is empty")
@@ -36,7 +36,7 @@ func Save(dataFolder, dsn string) error {
 		return fmt.Errorf("create the data folder: %w", err)
 	}
 
-	return securefile.WriteFile(GetFilePath(dataFolder), []byte(dsn), 0o600)
+	return securefile.WriteFileFor(GetFilePath(dataFolder), []byte(dsn), 0o600, readers)
 }
 
 // Load reads a stored connection string.

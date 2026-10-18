@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"databasus-backend/internal/launcher/webtls"
+	"databasus-backend/internal/util/securefile"
 )
 
 func Test_PrepareWebTLS_WhenHTTPIsOnLoopback_ServesPlainHTTP(t *testing.T) {
@@ -36,7 +37,7 @@ func Test_PrepareWebTLS_WhenHTTPSHasNoCertificate_Refuses(t *testing.T) {
 
 func Test_PrepareWebTLS_WhenHTTPSHasCertificate_ReturnsItsFiles(t *testing.T) {
 	dataFolder := t.TempDir()
-	_, err := webtls.GenerateSelfSigned(dataFolder, webtls.HostNames{DNSNames: []string{"localhost"}}, time.Now())
+	_, err := webtls.GenerateSelfSigned(dataFolder, webtls.HostNames{DNSNames: []string{"localhost"}}, time.Now().UTC(), securefile.CurrentAccount)
 	require.NoError(t, err)
 
 	files, err := prepareWebTLS(Config{DataFolder: dataFolder, WebListenHost: "", IsHTTPS: true}, slog.Default())

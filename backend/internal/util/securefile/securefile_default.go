@@ -3,6 +3,6 @@
 package securefile
 
 // POSIX mode bits passed to the open call already restrict the file; nothing more to do.
-func restrictToOwner(_ string, _ bool) error {
+func restrict(_ string, _ bool, _ Readers) error {
 	return nil
 }

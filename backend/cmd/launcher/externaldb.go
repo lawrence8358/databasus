@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"databasus-backend/internal/launcher/externaldb"
+	"databasus-backend/internal/util/securefile"
 )
 
 // The installer hands the connection string over in this environment variable, because a command
@@ -66,7 +67,7 @@ func saveExternalDb(arguments []string) int {
 		return 1
 	}
 
-	if err := externaldb.Save(*dataFolder, dsn); err != nil {
+	if err := externaldb.Save(*dataFolder, dsn, securefile.ServiceOnly); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 
 		return 1

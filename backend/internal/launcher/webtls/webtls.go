@@ -1,7 +1,7 @@
 // Package webtls keeps the HTTPS certificate the Web UI uses when the installer opens it to the
 // local network: a PEM certificate chain and private key under <data folder>\tls, imported from
-// a PFX file or generated as a self-signed certificate. Both files are restricted to the account
-// that wrote them, SYSTEM and Administrators.
+// a PFX file or generated as a self-signed certificate. Both files are restricted to SYSTEM,
+// Administrators and the readers the caller chooses (the installer leaves its own account out).
 package webtls
 
 import (
@@ -139,7 +139,7 @@ func isSelfSigned(leaf *x509.Certificate) bool {
 
 // store replaces the stored pair only after both new files are written, so a failure leaves the
 // previous certificate in place.
-func store(dataFolder string, certPEM, keyPEM []byte) error {
+func store(dataFolder string, certPEM, keyPEM []byte, readers securefile.Readers) error {
 	if _, err := tls.X509KeyPair(certPEM, keyPEM); err != nil {
 		return fmt.Errorf("the certificate and private key do not form a usable pair: %w", err)
 	}
@@ -151,7 +151,7 @@ func store(dataFolder string, certPEM, keyPEM []byte) error {
 		return fmt.Errorf("create %s: %w", folder, err)
 	}
 
-	if err := securefile.RestrictDir(folder, 0o700); err != nil {
+	if err := securefile.RestrictDirFor(folder, 0o700, readers); err != nil {
 		return fmt.Errorf("restrict %s: %w", folder, err)
 	}
 
@@ -164,7 +164,7 @@ func store(dataFolder string, certPEM, keyPEM []byte) error {
 	}
 
 	for _, file := range newFiles {
-		if err := securefile.WriteFile(file.path+newFileExt, file.content, 0o600); err != nil {
+		if err := securefile.WriteFileFor(file.path+newFileExt, file.content, 0o600, readers); err != nil {
 			return fmt.Errorf("write %s: %w", file.path+newFileExt, err)
 		}
 	}

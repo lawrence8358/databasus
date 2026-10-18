@@ -15,6 +15,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"databasus-backend/internal/util/securefile"
 )
 
 const (
@@ -69,13 +71,18 @@ func lookupCanonicalName(hostname string) (string, error) {
 }
 
 // GenerateSelfSigned replaces the stored certificate with a new self-signed one for names.
-func GenerateSelfSigned(dataFolder string, names HostNames, now time.Time) (Summary, error) {
+func GenerateSelfSigned(
+	dataFolder string,
+	names HostNames,
+	now time.Time,
+	readers securefile.Readers,
+) (Summary, error) {
 	certPEM, keyPEM, summary, err := createSelfSigned(names, now)
 	if err != nil {
 		return Summary{}, err
 	}
 
-	if err := store(dataFolder, certPEM, keyPEM); err != nil {
+	if err := store(dataFolder, certPEM, keyPEM, readers); err != nil {
 		return Summary{}, err
 	}
 
