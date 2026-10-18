@@ -29,7 +29,8 @@ Run the `.exe` as an administrator. Setup stops with the reason on anything olde
 Server 2016 / Windows 10 version 1607, and on anything but 64-bit Windows for x64 processors. It
 asks for the install folder, the program data folder, the backups folder and the Web UI port, and
 checks that the LocalSystem service account can write to both folders, that they are on a local
-disk, and that the port is free. It then registers and starts the `Databasus` service, waits until
+disk, that the backups folder follows the rules in [Changing the backups folder](#changing-the-backups-folder),
+and that the port is free. It then registers and starts the `Databasus` service, waits until
 the Web UI answers on `http://127.0.0.1:<port>/`, and offers to open it.
 
 Silent install, where every option has a parameter:
@@ -43,7 +44,7 @@ databasus-setup-1.2.3-x64.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG=C:\s
 |---|---|
 | `/DIR=` | `C:\Program Files\Databasus` |
 | `/DATADIR=` | `C:\ProgramData\Databasus` (metadata database, secret key, logs) |
-| `/BACKUPSDIR=` | `<data dir>\backups` (local storage; a local disk only) |
+| `/BACKUPSDIR=` | `<data dir>\backups` (local storage; see [Changing the backups folder](#changing-the-backups-folder) for the rules) |
 | `/PORT=` | `4005` |
 | `/EXTERNALDBFILE=` | none (bundled PostgreSQL); a file holding an external metadata database connection string |
 | `/BUNDLEDDB` | switches an install that used an external database back to the bundled one |
@@ -52,6 +53,39 @@ databasus-setup-1.2.3-x64.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG=C:\s
 | `/PFXPASSWORDFILE=` | a file whose first line is the PFX password |
 | `/SELFSIGNED` | with `/LANACCESS`, generates a new self-signed certificate |
 | `/LOCALONLY` | switches an install with LAN access back to 127.0.0.1 |
+
+### Changing the backups folder
+
+The backups folder can change after installation, for example when drive C: runs out of space: in
+the Web UI under **Databasus settings > Backups folder** (instance administrators only), or by
+running Setup again with `/BACKUPSDIR=` or a new value on its folders page (see
+[Upgrading](#upgrading)). New backups go to the new folder at once; the service does not restart.
+
+Nothing is moved. Backups made earlier stay in the folder they were written to and remain
+restorable, and retention still deletes them there, so the old disk frees up as they expire. The
+settings page lists those earlier folders. To free the space at once, stop the service, move the
+files from an earlier folder into the current one, and start it again: Databasus looks for a backup
+in the current folder first, then in the earlier ones.
+
+The folder must be an absolute path on a local fixed disk of this computer: no network path, mapped
+network drive or removable drive. It must not be a drive root, the Windows folder, a Program Files
+folder, `ProgramData`, `C:\Users` or `C:\Users\Public` themselves, the install folder or anything in it,
+or anything in the program data folder other than its `backups` folder. A junction or symbolic
+link that leads to such a place is refused too. Databasus creates a missing folder and checks that
+the service account (LocalSystem) can write and delete a file in it. Each change is recorded in the
+audit log.
+
+The choice is stored in `<data dir>\backups-folder.txt` (readable and writable by SYSTEM and
+Administrators only), together with the folders used before. It is the one place that decides where
+backups go: the Web UI and Setup both write it, and the service command line does not carry the
+folder, so a restart or an upgrade cannot undo a change. Docker and Linux installations do not show
+this setting; their backups folder comes from the volume and `DATABASUS_BACKUPS_DIR` as before.
+From a command line, with the service stopped:
+
+```powershell
+& "C:\Program Files\Databasus\databasus-launcher.exe" backups-folder -data-dir C:\ProgramData\Databasus             # shows it
+& "C:\Program Files\Databasus\databasus-launcher.exe" backups-folder -data-dir C:\ProgramData\Databasus -set E:\Backups
+```
 
 ### External metadata database
 
@@ -101,11 +135,18 @@ not register or start. The reason is in the `/LOG` file, and for `10` also in
 
 Run the new version's `.exe` over the installed one, interactively or with the same silent command
 line minus the folder options. Setup reads the earlier choices from `HKLM\SOFTWARE\Databasus` and
-keeps them without asking again: the program data folder, the backups folder, the Web UI port and
-the metadata database choice (only `/EXTERNALDBFILE` or `/BUNDLEDDB` change it), LAN access and its
-certificate (only `/LANACCESS`, `/LOCALONLY`, `/PFX` or `/SELFSIGNED` change them;
-`/DATADIR`, `/BACKUPSDIR` and `/PORT` are ignored on an upgrade, because moving the folders would
-start the service on an empty metadata database). The Ready page lists what is kept.
+keeps them without asking again: the program data folder and the Web UI port (`/DATADIR` and `/PORT`
+are ignored on an upgrade, because moving the data folder would start the service on an empty
+metadata database), the metadata database choice (only `/EXTERNALDBFILE` or `/BUNDLEDDB` change
+it), and LAN access and its certificate (only `/LANACCESS`, `/LOCALONLY`, `/PFX` or `/SELFSIGNED`
+change them). The Ready page lists what is kept.
+
+The backups folder is the one the service uses now, read from `<data dir>\backups-folder.txt`, so a
+change made in the Web UI is kept. An upgrade can change it: `/BACKUPSDIR=` in silent mode, or the
+folders page, which an interactive upgrade shows with the program data folder locked. A new folder
+is checked by the rules in [Changing the backups folder](#changing-the-backups-folder) before the
+service is stopped (exit code `7` when silent); the folder kept as it is is not checked again.
+Backups in the earlier folder stay there and remain restorable.
 
 Before it touches anything, Setup checks the existing metadata database: if it was created by
 another PostgreSQL major version than the one the new version bundles, Setup stops with the reason
@@ -126,11 +167,12 @@ all backups stay.
 ## Uninstalling
 
 From Apps & features, or `"<install dir>\unins000.exe"`. The program data folder and the backups
-folder stay on disk unless you choose to delete all data, which asks a second time because without
+folders stay on disk unless you choose to delete all data, which asks a second time because without
 the secret key encrypted settings and backups cannot be recovered. The program data folder is
-deleted as a whole. The backups folder may be shared with other programs, so only the files Databasus
-named there (backups, their sidecars and WAL segments, plus its own `temp` and `wal-queue` entries)
-are deleted, and the folder itself only when nothing else is left in it. Silently:
+deleted as a whole. The backups folders (the current one and every earlier one listed in
+`backups-folder.txt`) may be shared with other programs, so only the files Databasus named there
+(backups, their sidecars and WAL segments, plus its own `temp` and `wal-queue` entries) are deleted,
+and each folder itself only when nothing else is left in it. Silently:
 
 ```powershell
 & "C:\Program Files\Databasus\unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES             # keeps the data

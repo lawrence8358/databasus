@@ -181,8 +181,12 @@ INSERT INTO items SELECT i, 'item-' || i, i * 1.25 FROM generate_series(1, 5000)
     if ($currentVersion -eq $previousVersion) { throw "the version is still $previousVersion after the upgrade" }
     $commandLine = Get-ServiceCommandLine
     if ($commandLine -ne $commandLineBefore) { Write-Host "service command line was: $commandLineBefore" }
-    if (-not $commandLine.Contains($DataDir) -or -not $commandLine.Contains($BackupsDir) -or -not $commandLine.Contains("-port $Port")) {
-        throw "the upgraded service does not use the previous folders and port: $commandLine"
+    if (-not $commandLine.Contains($DataDir) -or -not $commandLine.Contains("-port $Port")) {
+        throw "the upgraded service does not use the previous data folder and port: $commandLine"
+    }
+    $recordedBackupsFolder = (Get-Content (Join-Path $DataDir 'backups-folder.txt') | Where-Object { $_ -like 'current=*' }) -replace '^current=', ''
+    if ($recordedBackupsFolder -ne $BackupsDir) {
+        throw "the upgraded service records the backups folder $recordedBackupsFolder, not $BackupsDir"
     }
 
     Write-Host '== newest migration applied'

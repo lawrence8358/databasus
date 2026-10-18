@@ -64,8 +64,11 @@ kept in `<data-dir>\metadata-db.password`. The server listens on `127.0.0.1:5437
 `<data-dir>\logs`. The launcher writes `ui\build\runtime-config.js`, passes the connection string
 and the folders to `databasus.exe`, and on Ctrl+C stops the backend first and the database second.
 If the database server was killed, the next start lets PostgreSQL recover it; if it cannot start at
-all, the launcher resets its WAL once, as the Docker image does. `-backups-dir` defaults to
-`<data-dir>\backups`. The Web UI and API listen on `127.0.0.1:4005`; change that with
+all, the launcher resets its WAL once, as the Docker image does. The first start also records the
+backups folder (`-backups-dir`, default `<data-dir>\backups`) in `<data-dir>\backups-folder.txt`;
+from then on that file decides and `-backups-dir` is ignored with a warning, because the Web UI and
+Setup change the folder there. `databasus-launcher.exe backups-folder -data-dir <dir> -set <folder>`
+changes it from a command line. The Web UI and API listen on `127.0.0.1:4005`; change that with
 `-listen-host` (`""` for every interface) and `-port`, which reach the backend as
 `DATABASUS_LISTEN_HOST` and `DATABASUS_PORT` (unset, the backend listens on every interface at
 4005, as in Docker). The other backend settings, such as `SMTP_HOST`, are read from the
@@ -84,9 +87,12 @@ certificate first, then run with it:
 `DATABASUS_TLS_KEY_FILE`; with both set, the backend serves HTTPS only on its one listener.
 
 To run Databasus as a Windows service instead, register it from an administrator prompt with the
-same flags; they are stored, as absolute paths, in the service's command line:
+same flags; they are stored, as absolute paths, in the service's command line. The backups folder is
+not one of them (`install` refuses `-backups-dir`); record it first:
 
-> databasus-launcher.exe install -data-dir C:\ProgramData\Databasus -backups-dir D:\DatabasusBackups
+> databasus-launcher.exe backups-folder -data-dir C:\ProgramData\Databasus -set D:\DatabasusBackups
+>
+> databasus-launcher.exe install -data-dir C:\ProgramData\Databasus
 >
 > sc.exe start Databasus
 
