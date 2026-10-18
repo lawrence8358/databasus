@@ -12,17 +12,19 @@ import (
 	"strconv"
 	"time"
 
-	"databasus-backend/internal/launcher/metadatadb"
 	"databasus-backend/internal/util/tools"
 )
 
 const defaultBackendStopTimeout = 30 * time.Second
 
 type Config struct {
-	DataFolder        string
-	BackupsFolder     string
-	MetadataDbPort    int
-	BackendExecutable string
+	DataFolder     string
+	BackupsFolder  string
+	MetadataDbPort int
+	// ExternalMetadataDsnFile, when set, names a file holding the connection string of an external
+	// metadata database; the bundled PostgreSQL is then neither initialised nor started.
+	ExternalMetadataDsnFile string
+	BackendExecutable       string
 	// WebListenHost and WebPort are where the backend serves the Web UI and API; an empty host
 	// means every interface.
 	WebListenHost string
@@ -64,25 +66,14 @@ func Run(ctx context.Context, config Config) error {
 		return err
 	}
 
-	metadataBinFolder, err := findMetadataBinFolder()
+	metadataDatabase, err := startMetadataDatabase(ctx, config, logger, childOutput)
 	if err != nil {
 		return err
 	}
 
-	metadataDatabase, err := metadatadb.Start(ctx, metadatadb.Settings{
-		DataFolder:   config.DataFolder,
-		BinFolder:    metadataBinFolder,
-		Port:         config.MetadataDbPort,
-		Logger:       logger,
-		ServerOutput: childOutput,
-	})
-	if err != nil {
-		return fmt.Errorf("start the metadata database: %w", err)
-	}
-
 	backend, err := startBackend(ctx, backendStartSpec{
 		executablePath: config.BackendExecutable,
-		metadataDsn:    metadataDatabase.GetDsn(),
+		metadataDsn:    metadataDatabase.getDsn(),
 		dataFolder:     config.DataFolder,
 		backupsFolder:  config.BackupsFolder,
 		webListenHost:  config.WebListenHost,
@@ -93,7 +84,7 @@ func Run(ctx context.Context, config Config) error {
 		logger:         logger,
 	})
 	if err != nil {
-		return errors.Join(err, metadataDatabase.Stop())
+		return errors.Join(err, metadataDatabase.stop())
 	}
 
 	logger.Info("Databasus is running")
@@ -102,7 +93,7 @@ func Run(ctx context.Context, config Config) error {
 	case <-ctx.Done():
 		logger.Info("stop requested")
 
-		return errors.Join(backend.stop(), metadataDatabase.Stop())
+		return errors.Join(backend.stop(), metadataDatabase.stop())
 	case <-backend.exited:
 		return errors.Join(
 			fmt.Errorf(
@@ -110,9 +101,9 @@ func Run(ctx context.Context, config Config) error {
 				backend.exitErr,
 				backend.outputTail.GetContents(),
 			),
-			metadataDatabase.Stop(),
+			metadataDatabase.stop(),
 		)
-	case databaseErr := <-metadataDatabase.GetUnexpectedExitChannel():
+	case databaseErr := <-metadataDatabase.exited:
 		return errors.Join(databaseErr, backend.stop())
 	}
 }
