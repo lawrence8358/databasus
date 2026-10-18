@@ -44,13 +44,31 @@ Swagger URL is:
 
 The backend also builds as a Windows x64 executable, for the fork's Windows installer. It runs
 PostgreSQL logical backups only; the other engines and the physical backup features report as
-unavailable. From `backend/`, after generating the swagger docs:
+unavailable. A second program, the launcher, takes the place of the Docker image's entrypoint: it
+runs the bundled PostgreSQL server for the metadata database and starts the backend against it.
+From `backend/`, after generating the swagger docs:
 
 > GOOS=windows GOARCH=amd64 go build -o databasus.exe ./cmd
+>
+> GOOS=windows GOARCH=amd64 go build -o databasus-launcher.exe ./cmd/launcher
 
 Put `migrations/`, `assets/tools/win-x64/` (as `assets/tools/win-x64/`) and, for the Web UI, the
-built frontend (as `ui/build/`) next to `databasus.exe`; it finds them relative to its own location,
-not the working directory. Then point it at an existing PostgreSQL for metadata and start it:
+built frontend (as `ui/build/`) next to both executables; they find them relative to their own
+location, not the working directory. Then start the launcher with a program data folder:
+
+> databasus-launcher.exe -data-dir C:\ProgramData\Databasus -backups-dir D:\DatabasusBackups
+
+On the first start it creates the metadata cluster in `<data-dir>\pgdata` with a random password,
+kept in `<data-dir>\metadata-db.password`. The server listens on `127.0.0.1:5437` (change it with
+`-metadata-db-port`) and accepts only password logins from that address; its log goes to
+`<data-dir>\logs`. The launcher writes `ui\build\runtime-config.js`, passes the connection string
+and the folders to `databasus.exe`, and on Ctrl+C stops the backend first and the database second.
+If the database server was killed, the next start lets PostgreSQL recover it; if it cannot start at
+all, the launcher resets its WAL once, as the Docker image does. `-backups-dir` defaults to
+`<data-dir>\backups`; the other backend settings, such as `SMTP_HOST`, are read from the
+environment as usual.
+
+To run the backend alone against a PostgreSQL you manage yourself, skip the launcher:
 
 > set ENV_MODE=production
 >
@@ -62,5 +80,5 @@ not the working directory. Then point it at an existing PostgreSQL for metadata 
 >
 > databasus.exe
 
-The client tools need the Microsoft Visual C++ runtime (`VCRUNTIME140.dll`), which most Windows
-machines already have.
+The bundled PostgreSQL programs need the Microsoft Visual C++ runtime (`VCRUNTIME140.dll`,
+`VCRUNTIME140_1.dll`, `MSVCP140.dll`), which most Windows machines already have.

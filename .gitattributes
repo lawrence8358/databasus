@@ -18,3 +18,6 @@
 # Windows-only scripts must keep CRLF.
 *.bat text eol=crlf
 *.cmd text eol=crlf
+
+# Vendored Windows PostgreSQL files ship byte for byte as EDB built them.
+assets/tools/win-x64/** -text
