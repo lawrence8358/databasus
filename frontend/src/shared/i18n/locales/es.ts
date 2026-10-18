@@ -274,6 +274,18 @@ export const es: typeof en = {
       sendTestEmail: 'Enviar correo de prueba',
       testEmailSent: 'Correo de prueba enviado a {{email}}',
     },
+    backupsFolder: {
+      title: 'Carpeta de copias de seguridad',
+      description:
+        'El almacenamiento local guarda las nuevas copias de seguridad en esta carpeta. Cambiarla no mueve nada: las copias anteriores se quedan donde están y se pueden seguir restaurando.',
+      currentFolder: 'Carpeta actual',
+      previousFolders: 'Carpetas anteriores, que aún guardan copias más antiguas:',
+      newFolder: 'Carpeta nueva',
+      rules:
+        'Use una carpeta en un disco local fijo de este equipo, no la raíz de una unidad, una unidad de red o extraíble, ni una carpeta de Windows o de programas. Databasus la crea si no existe y comprueba que el servicio puede escribir en ella.',
+      change: 'Cambiar carpeta',
+      changed: 'Las nuevas copias de seguridad se guardan ahora en {{folder}}',
+    },
     healthcheck: {
       title: 'Comprobación de disponibilidad',
       openInNewTab: 'Abrir en una pestaña nueva',
