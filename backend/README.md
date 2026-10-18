@@ -68,6 +68,21 @@ all, the launcher resets its WAL once, as the Docker image does. `-backups-dir` 
 `<data-dir>\backups`; the other backend settings, such as `SMTP_HOST`, are read from the
 environment as usual.
 
+To run Databasus as a Windows service instead, register it from an administrator prompt with the
+same flags; they are stored, as absolute paths, in the service's command line:
+
+> databasus-launcher.exe install -data-dir C:\ProgramData\Databasus -backups-dir D:\DatabasusBackups
+>
+> sc.exe start Databasus
+
+The `Databasus` service runs as LocalSystem, starts at boot, and is restarted by Windows 10, 30
+and 60 seconds after it crashes or stops with an error. Running `install` again updates the
+registration. Stopping the service stops the backend and then the database, as Ctrl+C does. The
+launcher's own log and the console output of the backend and the database server go to
+`<data-dir>\logs\launcher.log`; start and stop, and the reason the service stopped on its own,
+also go to the Application event log under the `Databasus` source.
+`databasus-launcher.exe uninstall` stops and removes the service and leaves the data folder alone.
+
 To run the backend alone against a PostgreSQL you manage yourself, skip the launcher:
 
 > set ENV_MODE=production

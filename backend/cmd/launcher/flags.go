@@ -19,7 +19,7 @@ func parseRunFlags(arguments []string) (launcher.Config, error) {
 
 	flags := flag.NewFlagSet("databasus-launcher", flag.ContinueOnError)
 	flags.Usage = func() {
-		fmt.Fprint(flags.Output(), usage)
+		_, _ = fmt.Fprint(flags.Output(), usage)
 		flags.PrintDefaults()
 	}
 
