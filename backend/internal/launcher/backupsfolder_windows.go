@@ -24,7 +24,8 @@ func selectBackupsFolder(config Config, logger *slog.Logger) (backupsFolderSelec
 	settings, err := settingsfile.ReadSettings(settingsFilePath)
 	switch {
 	case err == nil:
-		if config.BackupsFolder != "" && !settingsfile.IsSameFolder(getAbsoluteFolder(config.BackupsFolder), settings.CurrentFolder) {
+		if config.BackupsFolder != "" &&
+			!settingsfile.IsSameFolder(getAbsoluteFolder(config.BackupsFolder), settings.CurrentFolder) {
 			logger.Warn(
 				"ignoring -backups-dir: the backups folder set in the Web UI or by Setup wins",
 				"backups_folder", settings.CurrentFolder,
@@ -38,7 +39,13 @@ func selectBackupsFolder(config Config, logger *slog.Logger) (backupsFolderSelec
 			return backupsFolderSelection{}, err
 		}
 
-		logger.Info("recorded the backups folder", "backups_folder", settings.CurrentFolder, "settings_file", settingsFilePath)
+		logger.Info(
+			"recorded the backups folder",
+			"backups_folder",
+			settings.CurrentFolder,
+			"settings_file",
+			settingsFilePath,
+		)
 	default:
 		return backupsFolderSelection{}, fmt.Errorf("backups folder settings: %w", err)
 	}

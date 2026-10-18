@@ -20,8 +20,16 @@ func setBackupsFolder(arguments []string) int {
 	flags := flag.NewFlagSet("databasus-launcher backups-folder", flag.ContinueOnError)
 
 	dataFolder := flags.String("data-dir", getDefaultDataFolder(), "program data folder the service uses")
-	newFolder := flags.String("set", "", "backups folder to use from now on; without it the current settings are printed")
-	installFolder := flags.String("install-dir", getLauncherFolder(), "program folder; the backups folder must stay out of it")
+	newFolder := flags.String(
+		"set",
+		"",
+		"backups folder to use from now on; without it the current settings are printed",
+	)
+	installFolder := flags.String(
+		"install-dir",
+		getLauncherFolder(),
+		"program folder; the backups folder must stay out of it",
+	)
 	folderInUse := flags.String(
 		"in-use",
 		"",
