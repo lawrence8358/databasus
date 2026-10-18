@@ -27,6 +27,8 @@ type Config struct {
 	// means every interface.
 	WebListenHost string
 	WebPort       int
+	// AppVersion is what the backend reports as its version, as APP_VERSION does in the Docker image.
+	AppVersion string
 	// ChildOutput receives the backend's and the metadata server's console output; os.Stderr when nil.
 	ChildOutput io.Writer
 	Logger      *slog.Logger
@@ -85,6 +87,7 @@ func Run(ctx context.Context, config Config) error {
 		backupsFolder:  config.BackupsFolder,
 		webListenHost:  config.WebListenHost,
 		webPort:        config.WebPort,
+		appVersion:     config.AppVersion,
 		output:         childOutput,
 		stopTimeout:    defaultBackendStopTimeout,
 		logger:         logger,

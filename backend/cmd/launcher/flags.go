@@ -20,7 +20,7 @@ const (
 )
 
 func parseRunFlags(arguments []string) (launcher.Config, error) {
-	var config launcher.Config
+	config := launcher.Config{AppVersion: Version}
 
 	flags := flag.NewFlagSet("databasus-launcher", flag.ContinueOnError)
 	flags.Usage = func() {

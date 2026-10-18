@@ -24,6 +24,7 @@ const (
 	envModeEnvVariable       = "ENV_MODE"
 	webListenHostEnvVariable = "DATABASUS_LISTEN_HOST"
 	webPortEnvVariable       = "DATABASUS_PORT"
+	appVersionEnvVariable    = "APP_VERSION"
 
 	backendOutputTailBytes = 2048
 )
@@ -45,6 +46,7 @@ type backendStartSpec struct {
 	backupsFolder  string
 	webListenHost  string
 	webPort        int
+	appVersion     string
 	output         io.Writer
 	stopTimeout    time.Duration
 	logger         *slog.Logger
@@ -109,6 +111,10 @@ func buildBackendEnvironment(spec backendStartSpec) []string {
 
 	if _, isSet := os.LookupEnv(envModeEnvVariable); !isSet {
 		environment = append(environment, envModeEnvVariable+"=production")
+	}
+
+	if _, isSet := os.LookupEnv(appVersionEnvVariable); !isSet && spec.appVersion != "" {
+		environment = append(environment, appVersionEnvVariable+"="+spec.appVersion)
 	}
 
 	environment = append(environment,

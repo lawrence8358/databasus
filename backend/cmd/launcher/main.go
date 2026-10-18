@@ -13,6 +13,9 @@ import (
 	"databasus-backend/internal/launcher/winservice"
 )
 
+// Version is set at build time with -ldflags "-X main.Version=<version>".
+var Version = ""
+
 const usage = `Usage:
   databasus-launcher.exe [flags]            run in this console until Ctrl+C
   databasus-launcher.exe install [flags]    register the Databasus service with these flags (administrator)
