@@ -29,6 +29,9 @@ type Config struct {
 	// means every interface.
 	WebListenHost string
 	WebPort       int
+	// IsHTTPS serves the Web UI over HTTPS only, with the certificate stored in the data folder by
+	// the tls-setup command. A listen host other than loopback requires it.
+	IsHTTPS bool
 	// AppVersion is what the backend reports as its version, as APP_VERSION does in the Docker image.
 	AppVersion string
 	// ChildOutput receives the backend's and the metadata server's console output; os.Stderr when nil.
@@ -62,6 +65,11 @@ func Run(ctx context.Context, config Config) error {
 		return err
 	}
 
+	webTLSFiles, err := prepareWebTLS(config, logger)
+	if err != nil {
+		return err
+	}
+
 	if err := writeFrontendRuntimeConfigIfUiPresent(config.BackendExecutable, logger); err != nil {
 		return err
 	}
@@ -78,6 +86,7 @@ func Run(ctx context.Context, config Config) error {
 		backupsFolder:  config.BackupsFolder,
 		webListenHost:  config.WebListenHost,
 		webPort:        config.WebPort,
+		webTLSFiles:    webTLSFiles,
 		appVersion:     config.AppVersion,
 		output:         childOutput,
 		stopTimeout:    defaultBackendStopTimeout,

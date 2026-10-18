@@ -41,6 +41,12 @@ func parseRunFlags(arguments []string) (launcher.Config, error) {
 	flags.StringVar(&config.WebListenHost, "listen-host", defaultWebListenHost,
 		`address the Web UI listens on; "" for every interface`)
 	flags.IntVar(&config.WebPort, "port", defaultWebPort, "port of the Web UI")
+	flags.BoolVar(
+		&config.IsHTTPS,
+		"https",
+		false,
+		`serve the Web UI over HTTPS only, with the certificate stored by tls-setup (required unless -listen-host is loopback)`,
+	)
 
 	if err := flags.Parse(arguments); err != nil {
 		return launcher.Config{}, err
@@ -94,6 +100,10 @@ func buildServiceArguments(config launcher.Config) ([]string, error) {
 		}
 
 		arguments = append(arguments, "-backups-dir", backupsFolder)
+	}
+
+	if config.IsHTTPS {
+		arguments = append(arguments, "-https")
 	}
 
 	return arguments, nil

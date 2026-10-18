@@ -15,6 +15,7 @@ import (
 
 	"golang.org/x/sys/windows"
 
+	"databasus-backend/internal/launcher/webtls"
 	"databasus-backend/internal/util/locations"
 	"databasus-backend/internal/util/stopevent"
 )
@@ -24,6 +25,8 @@ const (
 	envModeEnvVariable       = "ENV_MODE"
 	webListenHostEnvVariable = "DATABASUS_LISTEN_HOST"
 	webPortEnvVariable       = "DATABASUS_PORT"
+	webTLSCertEnvVariable    = "DATABASUS_TLS_CERT_FILE"
+	webTLSKeyEnvVariable     = "DATABASUS_TLS_KEY_FILE"
 	appVersionEnvVariable    = "APP_VERSION"
 
 	backendOutputTailBytes = 2048
@@ -46,10 +49,12 @@ type backendStartSpec struct {
 	backupsFolder  string
 	webListenHost  string
 	webPort        int
-	appVersion     string
-	output         io.Writer
-	stopTimeout    time.Duration
-	logger         *slog.Logger
+	// webTLSFiles is nil when the Web UI is served over plain HTTP.
+	webTLSFiles *webtls.Files
+	appVersion  string
+	output      io.Writer
+	stopTimeout time.Duration
+	logger      *slog.Logger
 }
 
 func startBackend(ctx context.Context, spec backendStartSpec) (*backendProcess, error) {
@@ -126,6 +131,13 @@ func buildBackendEnvironment(spec backendStartSpec) []string {
 
 	if spec.backupsFolder != "" {
 		environment = append(environment, locations.BackupsFolderEnvVariable+"="+spec.backupsFolder)
+	}
+
+	if spec.webTLSFiles != nil {
+		environment = append(environment,
+			webTLSCertEnvVariable+"="+spec.webTLSFiles.CertFile,
+			webTLSKeyEnvVariable+"="+spec.webTLSFiles.KeyFile,
+		)
 	}
 
 	return environment

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -337,10 +338,20 @@ func startServerWithGracefulShutdown(log *slog.Logger, app *gin.Engine) {
 		Handler: app,
 	}
 
-	log.Info(fmt.Sprintf("http server listening on %s", srv.Addr))
+	if address.isHTTPS() {
+		srv.TLSConfig, err = loadServerTLSConfig(address.tlsCertFile, address.tlsKeyFile)
+		if err != nil {
+			log.Error("cannot load the HTTPS certificate", "error", err)
+			logger.ExitAfterFlush(1)
+		}
+
+		log.Info(fmt.Sprintf("https server listening on %s (no plain HTTP)", srv.Addr))
+	} else {
+		log.Info(fmt.Sprintf("http server listening on %s", srv.Addr))
+	}
 
 	go func() {
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := listenAndServe(srv); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Error("http server failed to listen", "error", err)
 		}
 	}()
