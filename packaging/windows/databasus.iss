@@ -7,6 +7,11 @@
 ;                   Exit code 0: installed and the Web UI answers. 7: a check failed before anything was
 ;                   installed (the reason is in the log). 10: files are installed but the service did
 ;                   not register or start (the reason is in the log).
+;                   [/EXTERNALDBFILE=<file>] [/BUNDLEDDB]
+;                   /EXTERNALDBFILE names a file holding the connection string of an external PostgreSQL
+;                   metadata database (the string itself is not accepted on the command line, because
+;                   Setup logs its command line); /BUNDLEDDB switches back to the bundled one. An upgrade
+;                   keeps the earlier choice unless one of them is given.
 ; Silent uninstall: "<install dir>\unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES [/DELETEDATA]
 
 #ifndef AppVersion
@@ -64,6 +69,7 @@ Root: HKLM; Subkey: "{#SettingsKey}"; ValueType: string; ValueName: "DataDir"; V
 Root: HKLM; Subkey: "{#SettingsKey}"; ValueType: string; ValueName: "BackupsDir"; ValueData: "{code:GetBackupsDir}"
 Root: HKLM; Subkey: "{#SettingsKey}"; ValueType: string; ValueName: "WebPort"; ValueData: "{code:GetPort}"
 Root: HKLM; Subkey: "{#SettingsKey}"; ValueType: string; ValueName: "WebListenHost"; ValueData: "{code:GetListenHost}"
+Root: HKLM; Subkey: "{#SettingsKey}"; ValueType: string; ValueName: "ExternalMetadataDb"; ValueData: "{code:GetExternalDbFlag}"
 Root: HKLM; Subkey: "{#SettingsKey}"; ValueType: string; ValueName: "Version"; ValueData: "{#AppVersion}"
 
 [Run]
@@ -212,6 +218,200 @@ begin
   end;
 end;
 
+{ ---------- external metadata database ---------- }
+
+{ The connection string holds a password, so it never goes on a command line (visible to other
+  users, written to the Setup log): a typed one reaches the launcher through an environment
+  variable of this process, a file one by the path of a file, and the launcher stores it in the
+  data folder with a restricted ACL. }
+const
+  ExternalDbEnvVariable = 'DATABASUS_INSTALLER_EXTERNAL_DB_DSN';
+  ExternalDbFileName = 'external-metadata-db.dsn';
+
+var
+  ExternalDbPage: TWizardPage;
+  ExternalDbCheckBox: TNewCheckBox;
+  ExternalDbEdit: TPasswordEdit;
+  ExternalDbFileParam: String;
+  WasExternalDbChosen: Boolean;
+
+function SetEnvironmentVariable(Name, Value: String): Boolean;
+  external 'SetEnvironmentVariableW@kernel32.dll stdcall';
+
+function IsBundledDbRequested: Boolean;
+var
+  I: Integer;
+begin
+  Result := False;
+  for I := 1 to ParamCount do
+    if CompareText(ParamStr(I), '/BUNDLEDDB') = 0 then
+      Result := True;
+end;
+
+function IsExternalDbChosen: Boolean;
+begin
+  Result := ExternalDbCheckBox.Checked;
+end;
+
+function GetExternalDbFlag(Param: String): String;
+begin
+  if IsExternalDbChosen then
+    Result := '1'
+  else
+    Result := '0';
+end;
+
+function GetExternalDbTypedValue: String;
+begin
+  Result := Trim(ExternalDbEdit.Text);
+end;
+
+{ The stored string of an earlier install, kept when the administrator types nothing new. }
+function GetPreviousExternalDbFile: String;
+begin
+  Result := AddBackslash(GetPreviousSetting('DataDir', '')) + ExternalDbFileName;
+end;
+
+{ The file the launcher reads the string from, or '' when the administrator typed it. }
+function GetExternalDbSourceFile: String;
+begin
+  Result := '';
+  if GetExternalDbTypedValue <> '' then
+    exit;
+  if ExternalDbFileParam <> '' then
+    Result := ExternalDbFileParam
+  else
+    Result := GetPreviousExternalDbFile;
+end;
+
+function GetExternalDbTargetFile: String;
+begin
+  Result := AddBackslash(GetDataDir('')) + ExternalDbFileName;
+end;
+
+function RunExternalDbCommand(const Params: String; var Output: String): Integer;
+var
+  TypedValue: String;
+begin
+  TypedValue := GetExternalDbTypedValue;
+  if TypedValue <> '' then
+    SetEnvironmentVariable(ExternalDbEnvVariable, TypedValue);
+  try
+    Result := RunAndCapture(GetLauncherForChecks, Params, Output);
+  finally
+    SetEnvironmentVariable(ExternalDbEnvVariable, '');
+  end;
+end;
+
+{ Returns the problem in words for the person running Setup, or '' when the external database
+  is not chosen or accepts the connection string. }
+function CheckExternalDb: String;
+var
+  SourceFile, Params, Output: String;
+  ExitCode: Integer;
+begin
+  Result := '';
+  if not IsExternalDbChosen then
+    exit;
+
+  SourceFile := GetExternalDbSourceFile;
+  Params := 'test-external-db';
+  if SourceFile <> '' then
+  begin
+    if not FileExists(SourceFile) then
+    begin
+      if ExternalDbFileParam <> '' then
+        Result := 'The connection string file ' + SourceFile + ' does not exist.'
+      else
+        Result := 'Enter the connection string of the external PostgreSQL database.';
+      exit;
+    end;
+    Params := Params + ' -file "' + SourceFile + '"';
+  end;
+
+  ExitCode := RunExternalDbCommand(Params, Output);
+  if ExitCode <> 0 then
+  begin
+    Result := Trim(Output);
+    if Result = '' then
+      Result := 'The external metadata database check failed (exit code ' + IntToStr(ExitCode) + ').';
+    Result := Result + #13#10 + #13#10 + 'Nothing has been installed.';
+  end;
+end;
+
+{ Stores the string for the service, or removes a string left by an earlier install that used one. }
+function StoreExternalDb(var Failure: String): Boolean;
+var
+  SourceFile, Params: String;
+begin
+  Result := True;
+  if not IsExternalDbChosen then
+  begin
+    if FileExists(GetExternalDbTargetFile) then
+      DeleteFile(GetExternalDbTargetFile);
+    exit;
+  end;
+
+  SourceFile := GetExternalDbSourceFile;
+  Params := 'save-external-db -data-dir "' + GetDataDir('') + '"';
+  if SourceFile <> '' then
+    Params := Params + ' -file "' + SourceFile + '"';
+  Result := RunExternalDbCommand(Params, Failure) = 0;
+end;
+
+procedure ExternalDbCheckBoxClick(Sender: TObject);
+begin
+  ExternalDbEdit.Enabled := ExternalDbCheckBox.Checked;
+end;
+
+procedure CreateExternalDbPage(const AfterPageId: Integer);
+var
+  Description, Prompt: TNewStaticText;
+  PreviousFile: String;
+begin
+  ExternalDbFileParam := ExpandConstant('{param:EXTERNALDBFILE|}');
+  PreviousFile := GetPreviousExternalDbFile;
+  WasExternalDbChosen := (GetPreviousSetting('ExternalMetadataDb', '0') = '1') and FileExists(PreviousFile);
+
+  ExternalDbPage := CreateCustomPage(AfterPageId,
+    'Metadata database (advanced)', 'Where should Databasus keep its own settings and records?');
+
+  Description := TNewStaticText.Create(ExternalDbPage);
+  Description.Parent := ExternalDbPage.Surface;
+  Description.WordWrap := True;
+  Description.Width := ExternalDbPage.SurfaceWidth;
+  Description.Caption :=
+    'By default Databasus runs its own PostgreSQL for this. If your organization already runs and backs up ' +
+    'a PostgreSQL server, Databasus can keep it there instead; the bundled PostgreSQL is then neither ' +
+    'initialized nor started. The database must be empty or already used by Databasus.';
+
+  ExternalDbCheckBox := TNewCheckBox.Create(ExternalDbPage);
+  ExternalDbCheckBox.Parent := ExternalDbPage.Surface;
+  ExternalDbCheckBox.Top := Description.Top + Description.Height + ScaleY(12);
+  ExternalDbCheckBox.Width := ExternalDbPage.SurfaceWidth;
+  ExternalDbCheckBox.Caption := 'Use an external PostgreSQL server';
+  ExternalDbCheckBox.OnClick := @ExternalDbCheckBoxClick;
+
+  Prompt := TNewStaticText.Create(ExternalDbPage);
+  Prompt.Parent := ExternalDbPage.Surface;
+  Prompt.Top := ExternalDbCheckBox.Top + ExternalDbCheckBox.Height + ScaleY(12);
+  Prompt.WordWrap := True;
+  Prompt.Width := ExternalDbPage.SurfaceWidth;
+  Prompt.Caption := 'Connection string, for example ' +
+    'postgres://user:password@host:5432/databasus?sslmode=require';
+  if WasExternalDbChosen then
+    Prompt.Caption := Prompt.Caption + #13#10 +
+      'An external database is already configured. Leave this empty to keep its stored connection string.';
+
+  ExternalDbEdit := TPasswordEdit.Create(ExternalDbPage);
+  ExternalDbEdit.Parent := ExternalDbPage.Surface;
+  ExternalDbEdit.Top := Prompt.Top + Prompt.Height + ScaleY(6);
+  ExternalDbEdit.Width := ExternalDbPage.SurfaceWidth;
+
+  ExternalDbCheckBox.Checked := (ExternalDbFileParam <> '') or (WasExternalDbChosen and not IsBundledDbRequested);
+  ExternalDbCheckBoxClick(nil);
+end;
+
 { ---------- supported systems ---------- }
 
 function GetArchitectureName: String;
@@ -256,9 +456,11 @@ end;
 
 { ---------- upgrade ---------- }
 
-{ Running Setup over an installed Databasus keeps the program data folder, the backups folder and
-  the port from the settings key the previous Setup wrote: the metadata database, secret key and
-  backups stay where the service expects them, and the new service start runs the migrations.
+{ Running Setup over an installed Databasus keeps the program data folder, the backups folder, the
+  port and the metadata database choice from the settings key the previous Setup wrote: the
+  metadata database, secret key and backups stay where the service expects them, and the new
+  service start runs the migrations. The external database choice is kept by its own page's
+  defaults (/EXTERNALDBFILE and /BUNDLEDDB still change it); the page is only skipped here.
   The hooks below use event attributes so they run beside the main event functions. }
 
 var
@@ -306,7 +508,8 @@ end;
 <event('ShouldSkipPage')>
 function UpgradeShouldSkipPage(PageID: Integer): Boolean;
 begin
-  Result := IsUpgrade and ((PageID = FoldersPage.ID) or (PageID = PortPage.ID));
+  Result := IsUpgrade and
+    ((PageID = FoldersPage.ID) or (PageID = PortPage.ID) or (PageID = ExternalDbPage.ID));
 end;
 
 <event('CurPageChanged')>
@@ -320,17 +523,26 @@ begin
     WizardForm.ReadyMemo.Lines.Add('      Program data folder: ' + GetDataDir(''));
     WizardForm.ReadyMemo.Lines.Add('      Backups folder: ' + GetBackupsDir(''));
     WizardForm.ReadyMemo.Lines.Add('      Web UI port: ' + GetPort(''));
+    if IsExternalDbChosen then
+      WizardForm.ReadyMemo.Lines.Add('      Metadata database: external PostgreSQL (stored connection string)')
+    else
+      WizardForm.ReadyMemo.Lines.Add('      Metadata database: bundled PostgreSQL');
   end;
 end;
 
 { Runs before the main PrepareToInstall stops the service, so a refused upgrade leaves the running
-  version and its data untouched. A silent install checks everything in the main implementation. }
+  version and its data untouched. The skipped pages' checks run here; a silent install checks
+  everything in the main implementation. }
 <event('PrepareToInstall')>
 function UpgradePrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   Result := '';
   if IsUpgrade and not WizardSilent then
+  begin
     Result := CheckChoices(True, False);
+    if Result = '' then
+      Result := CheckExternalDb;
+  end;
 end;
 
 { ---------- wizard ---------- }
@@ -357,6 +569,8 @@ begin
   PortPage.Add('Port:', False);
   PortPage.Values[0] := ExpandConstant('{param:PORT|' + GetPreviousSetting('WebPort', '{#DefaultPort}') + '}');
 
+  CreateExternalDbPage(PortPage.ID);
+
   KeepPreviousSettingsOnUpgrade;
 end;
 
@@ -372,7 +586,9 @@ begin
   if CurPageID = FoldersPage.ID then
     Problems := CheckChoices(True, False)
   else if CurPageID = PortPage.ID then
-    Problems := CheckChoices(False, True);
+    Problems := CheckChoices(False, True)
+  else if CurPageID = ExternalDbPage.ID then
+    Problems := CheckExternalDb;
 
   if Problems <> '' then
   begin
@@ -409,6 +625,8 @@ begin
   if WizardSilent then
   begin
     Result := CheckChoices(True, True);
+    if Result = '' then
+      Result := CheckExternalDb;
     if Result <> '' then
       exit;
   end;
@@ -468,9 +686,17 @@ begin
   WasServiceInstalled := IsServiceInstalled;
   LogsHint := ' See ' + AddBackslash(GetDataDir('')) + 'logs\launcher.log and the Application event log.';
 
+  if not StoreExternalDb(Output) then
+  begin
+    FailInstall('Storing the external metadata database connection string failed:' + #13#10 + Output);
+    exit;
+  end;
+
   WizardForm.StatusLabel.Caption := 'Registering the Databasus service...';
   Params := 'install -data-dir "' + GetDataDir('') + '" -backups-dir "' + GetBackupsDir('') + '"' +
     ' -listen-host ' + ListenHost + ' -port ' + GetPort('');
+  if IsExternalDbChosen then
+    Params := Params + ' -external-metadata-db-file "' + GetExternalDbTargetFile + '"';
   if RunAndCapture(ExpandConstant('{app}\databasus-launcher.exe'), Params, Output) <> 0 then
   begin
     FailInstall('Registering the Databasus service failed:' + #13#10 + Output);

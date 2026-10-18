@@ -22,6 +22,11 @@ const usage = `Usage:
   databasus-launcher.exe uninstall          stop and remove the Databasus service (administrator)
   databasus-launcher.exe check-install -data-dir <dir> -backups-dir <dir> -port <port>
                                             check the installer's choices; prints one line per problem
+  databasus-launcher.exe test-external-db [-file <path>]
+                                            check an external metadata database; the connection string
+                                            comes from DATABASUS_INSTALLER_EXTERNAL_DB_DSN or -file
+  databasus-launcher.exe save-external-db -data-dir <dir> [-file <path>]
+                                            store that connection string (or the one in -file) under the data folder (restricted ACL)
 
 Flags:
 `
@@ -39,6 +44,10 @@ func run() int {
 			return uninstallService()
 		case "check-install":
 			return checkInstall(os.Args[2:])
+		case "test-external-db":
+			return testExternalDb(os.Args[2:])
+		case "save-external-db":
+			return saveExternalDb(os.Args[2:])
 		}
 	}
 
