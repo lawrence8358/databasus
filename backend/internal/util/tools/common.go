@@ -41,10 +41,9 @@ type ToolCheckResult struct {
 
 // checkBinDir verifies binDir exists and that every command in
 // requiredCommands is present and, where the platform has one, has the
-// executable bit set. Returns the
-// collected errors. If the directory does not exist, returns a single
-// not-found error so callers can treat it differently for fatal vs non-fatal
-// bundles.
+// executable bit set. Returns the collected errors. If the directory does not
+// exist, returns a single not-found error so callers can treat it differently
+// for fatal vs non-fatal bundles.
 func checkBinDir(binDir string, requiredCommands []string) []error {
 	if _, err := os.Stat(binDir); os.IsNotExist(err) {
 		return []error{fmt.Errorf("client tools bin directory not found: %s", binDir)}
