@@ -19,6 +19,10 @@ import (
 )
 
 func main() {
+	os.Exit(run())
+}
+
+func run() int {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 
 	config := launcher.Config{Logger: logger}
@@ -35,7 +39,7 @@ func main() {
 
 	if err := launcher.BindChildProcessesToLauncherLifetime(); err != nil {
 		logger.Error("could not tie child processes to the launcher", "error", err)
-		os.Exit(1)
+		return 1
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -43,10 +47,12 @@ func main() {
 
 	if err := launcher.Run(ctx, config); err != nil {
 		logger.Error("Databasus stopped", "error", err)
-		os.Exit(1)
+		return 1
 	}
 
 	logger.Info("Databasus stopped")
+
+	return 0
 }
 
 func getDefaultDataFolder() string {

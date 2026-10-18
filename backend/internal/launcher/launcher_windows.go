@@ -59,7 +59,7 @@ func Run(ctx context.Context, config Config) error {
 		return fmt.Errorf("start the metadata database: %w", err)
 	}
 
-	backend, err := startBackend(backendStartSpec{
+	backend, err := startBackend(ctx, backendStartSpec{
 		executablePath: config.BackendExecutable,
 		metadataDsn:    metadataDatabase.GetDsn(),
 		dataFolder:     config.DataFolder,
@@ -80,7 +80,7 @@ func Run(ctx context.Context, config Config) error {
 		return errors.Join(backend.stop(), metadataDatabase.Stop())
 	case <-backend.exited:
 		return errors.Join(
-			fmt.Errorf("the backend exited: %v", backend.exitErr),
+			fmt.Errorf("the backend exited: %w", backend.exitErr),
 			metadataDatabase.Stop(),
 		)
 	case databaseErr := <-metadataDatabase.GetUnexpectedExitChannel():

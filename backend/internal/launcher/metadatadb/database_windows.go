@@ -138,7 +138,7 @@ func (d *Database) reportUnexpectedExit() {
 		return
 	}
 
-	d.unexpectedExits <- fmt.Errorf("%w: %v", ErrServerExited, d.serverExitErr)
+	d.unexpectedExits <- fmt.Errorf("%w: %w", ErrServerExited, d.serverExitErr)
 }
 
 // A server that crashed normally recovers on its own by replaying WAL. When it cannot start at
@@ -211,7 +211,7 @@ func (d *Database) waitUntilReady(ctx context.Context) error {
 	for {
 		select {
 		case <-d.serverExited:
-			return fmt.Errorf("%w during startup (%v); see the output above and %s",
+			return fmt.Errorf("%w during startup (%w); see the output above and %s",
 				ErrServerExited, d.serverExitErr, d.settings.getLogFolder())
 		default:
 		}

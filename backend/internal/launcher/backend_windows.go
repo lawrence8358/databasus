@@ -1,6 +1,7 @@
 package launcher
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -39,8 +40,8 @@ type backendStartSpec struct {
 
 // The backend runs in its own process group so a Ctrl+C typed in the console reaches only the
 // launcher, which then stops the backend before the database instead of both at once.
-func startBackend(spec backendStartSpec) (*backendProcess, error) {
-	command := exec.Command(spec.executablePath)
+func startBackend(ctx context.Context, spec backendStartSpec) (*backendProcess, error) {
+	command := exec.CommandContext(context.WithoutCancel(ctx), spec.executablePath)
 	command.Dir = filepath.Dir(spec.executablePath)
 	command.Env = buildBackendEnvironment(spec)
 	command.Stdout = os.Stdout

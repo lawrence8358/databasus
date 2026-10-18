@@ -42,7 +42,11 @@ func stopOrphanedServer(ctx context.Context, settings Settings) error {
 }
 
 func runPgCtlStop(settings Settings) error {
-	stopCommand := exec.Command(
+	stopCtx, cancel := context.WithTimeout(context.Background(), settings.StopTimeout+10*time.Second)
+	defer cancel()
+
+	stopCommand := exec.CommandContext(
+		stopCtx,
 		settings.getProgramPath("pg_ctl"),
 		"stop",
 		"--pgdata="+settings.getClusterFolder(),
@@ -90,7 +94,9 @@ func runPgResetwal(ctx context.Context, settings Settings) error {
 // then misread as a damaged cluster and answer with a WAL reset. Checking first keeps the two
 // apart and names the real problem.
 func ensurePortIsFree(port int) error {
-	listener, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
+	var listenConfig net.ListenConfig
+
+	listener, err := listenConfig.Listen(context.Background(), "tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
 	if err != nil {
 		return fmt.Errorf("port %d on 127.0.0.1, needed by the metadata database, is in use: %w", port, err)
 	}
