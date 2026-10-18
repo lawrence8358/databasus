@@ -9,7 +9,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"syscall"
 
 	"github.com/google/uuid"
 
@@ -217,9 +216,10 @@ func (l *LocalStorage) Update(incoming *LocalStorage) {
 }
 
 // moveFile moves a file from src to dst. It first attempts os.Rename for efficiency.
-// If rename fails with a cross-device link error (EXDEV), it falls back to copy-then-delete.
-// This happens when users mount temp and backups directories as separate Docker volumes
-// (e.g., on Unraid with split volume mapping), causing them to reside on different filesystems.
+// If rename fails because the two paths are on different filesystems, it falls back to
+// copy-then-delete. This happens when users mount temp and backups directories as separate
+// Docker volumes (e.g., on Unraid with split volume mapping), or on Windows when the temp
+// folder is configured on another drive than the backups folder.
 func moveFile(src, dst string) error {
 	err := os.Rename(src, dst)
 	if err == nil {
@@ -227,10 +227,24 @@ func moveFile(src, dst string) error {
 	}
 
 	var linkErr *os.LinkError
-	if !errors.As(err, &linkErr) || !errors.Is(linkErr.Err, syscall.EXDEV) {
+	if !errors.As(err, &linkErr) || !isCrossDeviceError(linkErr.Err) {
 		return err
 	}
 
+	if err = copyFileAndSync(src, dst); err != nil {
+		return err
+	}
+
+	// Windows refuses to delete a file that is still open, so the source is
+	// removed only after copyFileAndSync has closed both handles.
+	if err = os.Remove(src); err != nil {
+		return fmt.Errorf("failed to remove source file: %w", err)
+	}
+
+	return nil
+}
+
+func copyFileAndSync(src, dst string) error {
 	srcFile, err := os.Open(src)
 	if err != nil {
 		return fmt.Errorf("failed to open source file: %w", err)
@@ -253,10 +267,6 @@ func moveFile(src, dst string) error {
 
 	if err = dstFile.Sync(); err != nil {
 		return fmt.Errorf("failed to sync destination file: %w", err)
-	}
-
-	if err = os.Remove(src); err != nil {
-		return fmt.Errorf("failed to remove source file: %w", err)
 	}
 
 	return nil

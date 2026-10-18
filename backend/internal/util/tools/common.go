@@ -40,10 +40,10 @@ type ToolCheckResult struct {
 }
 
 // checkBinDir verifies binDir exists and that every command in
-// requiredCommands is present and has the executable bit set. Returns the
-// collected errors. If the directory does not exist, returns a single
-// not-found error so callers can treat it differently for fatal vs non-fatal
-// bundles.
+// requiredCommands is present and, where the platform has one, has the
+// executable bit set. Returns the collected errors. If the directory does not
+// exist, returns a single not-found error so callers can treat it differently
+// for fatal vs non-fatal bundles.
 func checkBinDir(binDir string, requiredCommands []string) []error {
 	if _, err := os.Stat(binDir); os.IsNotExist(err) {
 		return []error{fmt.Errorf("client tools bin directory not found: %s", binDir)}
@@ -51,7 +51,7 @@ func checkBinDir(binDir string, requiredCommands []string) []error {
 
 	var errs []error
 	for _, cmd := range requiredCommands {
-		cmdPath := filepath.Join(binDir, cmd)
+		cmdPath := getExecutablePath(binDir, cmd)
 
 		info, err := os.Stat(cmdPath)
 		if os.IsNotExist(err) {
@@ -63,7 +63,7 @@ func checkBinDir(binDir string, requiredCommands []string) []error {
 			continue
 		}
 
-		if info.Mode().Perm()&0o111 == 0 {
+		if isExecutableBitRequired && info.Mode().Perm()&0o111 == 0 {
 			errs = append(errs, fmt.Errorf("client command not executable: %s", cmdPath))
 		}
 	}
@@ -109,7 +109,7 @@ func runClients(
 	var errs []error
 
 	for _, cmd := range requiredCommands {
-		cmdPath := filepath.Join(binDir, cmd)
+		cmdPath := getExecutablePath(binDir, cmd)
 
 		ctx, cancel := context.WithTimeout(context.Background(), clientVersionTimeout)
 		output, err := exec.CommandContext(ctx, cmdPath, "--version").CombinedOutput()
@@ -146,6 +146,12 @@ func runClients(
 	}
 
 	return errs
+}
+
+// getExecutablePath names a client inside its bin directory. Commands are
+// registered by their POSIX names; Windows needs the .exe suffix on the file.
+func getExecutablePath(binDir, command string) string {
+	return filepath.Join(binDir, command+executableSuffix)
 }
 
 type DbEngine string

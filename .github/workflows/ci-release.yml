@@ -58,6 +58,12 @@ jobs:
           cd backend
           golangci-lint run
 
+      - name: Check the Windows x64 build
+        run: |
+          cd backend
+          GOOS=windows GOARCH=amd64 go build -o /dev/null ./cmd
+          GOOS=windows GOARCH=amd64 go vet ./...
+
       - name: Verify go mod tidy
         run: |
           cd backend

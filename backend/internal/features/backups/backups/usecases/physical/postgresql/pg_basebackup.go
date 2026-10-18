@@ -172,14 +172,6 @@ func parseLsnsFromStderr(stderr []byte) (walmath.LSN, walmath.LSN, int, error) {
 	return startLSN, stopLSN, timelineID, nil
 }
 
-func signalForGracefulCancel(p *os.Process) error {
-	if p == nil {
-		return nil
-	}
-
-	return p.Signal(os.Interrupt)
-}
-
 func truncateStderr(b []byte) string {
 	const max = 2048
 
