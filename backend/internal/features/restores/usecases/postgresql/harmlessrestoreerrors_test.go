@@ -57,7 +57,9 @@ pg_restore: warning: errors ignored on restore: 1`
 	assert.False(t, IsEveryIgnoredRestoreErrorHarmless(relationClash))
 }
 
-func Test_IsEveryIgnoredRestoreErrorHarmless_WhenNewerClientSetsTransactionTimeoutOnOlderServer_ReturnsTrue(t *testing.T) {
+func Test_IsEveryIgnoredRestoreErrorHarmless_WhenNewerClientSetsTransactionTimeoutOnOlderServer_ReturnsTrue(
+	t *testing.T,
+) {
 	// pg_restore.exe ends its lines with CRLF.
 	newerClientStderr := "pg_restore: connecting to database for restore\r\n" +
 		"pg_restore: executing SELECT pg_catalog.set_config('search_path', '', false);\r\n" +
@@ -78,7 +80,9 @@ pg_restore: warning: errors ignored on restore: 1`
 	assert.False(t, IsEveryIgnoredRestoreErrorHarmless(unknownParameter))
 }
 
-func Test_IsEveryIgnoredRestoreErrorHarmless_WhenPublicSchemaAndTransactionTimeoutBothIgnored_ReturnsTrue(t *testing.T) {
+func Test_IsEveryIgnoredRestoreErrorHarmless_WhenPublicSchemaAndTransactionTimeoutBothIgnored_ReturnsTrue(
+	t *testing.T,
+) {
 	bothHarmless := `pg_restore: error: could not execute query: ERROR:  unrecognized configuration parameter "transaction_timeout"
 Command was: SET transaction_timeout = 0;
 pg_restore: error: could not execute query: ERROR:  schema "public" already exists
