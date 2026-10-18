@@ -87,6 +87,8 @@ try {
     Write-Host '== start'
     Start-Service $serviceName
     Wait-Healthy
+    $passwordFile = Join-Path $DataDir 'metadata-db.password'
+    $passwordHash = (Get-FileHash $passwordFile).Hash
 
     Write-Host '== restart'
     $gracefulStopsBefore = Get-GracefulStopCount
@@ -103,6 +105,7 @@ try {
         $current.State -eq 'Running' -and $current.ProcessId -ne 0 -and $current.ProcessId -ne $killedProcessId
     } 90 'the service control manager to restart the service'
     Wait-Healthy
+    if ((Get-FileHash $passwordFile).Hash -ne $passwordHash) { throw 'the metadata database was initialised again instead of reused' }
 
     Write-Host '== stop'
     $gracefulStopsBefore = Get-GracefulStopCount
