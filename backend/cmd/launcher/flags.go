@@ -14,6 +14,11 @@ import (
 	"databasus-backend/internal/util/locations"
 )
 
+const (
+	defaultWebListenHost = "127.0.0.1"
+	defaultWebPort       = 4005
+)
+
 func parseRunFlags(arguments []string) (launcher.Config, error) {
 	var config launcher.Config
 
@@ -31,6 +36,9 @@ func parseRunFlags(arguments []string) (launcher.Config, error) {
 		"port of the bundled metadata PostgreSQL on 127.0.0.1")
 	flags.StringVar(&config.BackendExecutable, "backend", getDefaultBackendExecutable(),
 		"path to databasus.exe")
+	flags.StringVar(&config.WebListenHost, "listen-host", defaultWebListenHost,
+		`address the Web UI listens on; "" for every interface`)
+	flags.IntVar(&config.WebPort, "port", defaultWebPort, "port of the Web UI")
 
 	if err := flags.Parse(arguments); err != nil {
 		return launcher.Config{}, err
@@ -38,6 +46,10 @@ func parseRunFlags(arguments []string) (launcher.Config, error) {
 
 	if flags.NArg() > 0 {
 		return launcher.Config{}, fmt.Errorf("unexpected argument %q", flags.Arg(0))
+	}
+
+	if config.WebPort < 1 || config.WebPort > 65535 {
+		return launcher.Config{}, fmt.Errorf("-port must be from 1 to 65535, got %d", config.WebPort)
 	}
 
 	return config, nil
@@ -60,6 +72,8 @@ func buildServiceArguments(config launcher.Config) ([]string, error) {
 		"-data-dir", dataFolder,
 		"-metadata-db-port", strconv.Itoa(config.MetadataDbPort),
 		"-backend", backendExecutable,
+		"-listen-host", config.WebListenHost,
+		"-port", strconv.Itoa(config.WebPort),
 	}
 
 	if config.BackupsFolder != "" {
