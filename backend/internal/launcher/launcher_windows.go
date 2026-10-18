@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -20,7 +21,9 @@ type Config struct {
 	BackupsFolder     string
 	MetadataDbPort    int
 	BackendExecutable string
-	Logger            *slog.Logger
+	// ChildOutput receives the backend's and the metadata server's console output; os.Stderr when nil.
+	ChildOutput io.Writer
+	Logger      *slog.Logger
 }
 
 // Run returns after both the metadata database and the backend have stopped: when ctx is
@@ -30,6 +33,11 @@ func Run(ctx context.Context, config Config) error {
 	logger := config.Logger
 	if logger == nil {
 		logger = slog.Default()
+	}
+
+	childOutput := config.ChildOutput
+	if childOutput == nil {
+		childOutput = os.Stderr
 	}
 
 	if config.DataFolder == "" {
@@ -50,10 +58,11 @@ func Run(ctx context.Context, config Config) error {
 	}
 
 	metadataDatabase, err := metadatadb.Start(ctx, metadatadb.Settings{
-		DataFolder: config.DataFolder,
-		BinFolder:  metadataBinFolder,
-		Port:       config.MetadataDbPort,
-		Logger:     logger,
+		DataFolder:   config.DataFolder,
+		BinFolder:    metadataBinFolder,
+		Port:         config.MetadataDbPort,
+		Logger:       logger,
+		ServerOutput: childOutput,
 	})
 	if err != nil {
 		return fmt.Errorf("start the metadata database: %w", err)
@@ -64,6 +73,7 @@ func Run(ctx context.Context, config Config) error {
 		metadataDsn:    metadataDatabase.GetDsn(),
 		dataFolder:     config.DataFolder,
 		backupsFolder:  config.BackupsFolder,
+		output:         childOutput,
 		stopTimeout:    defaultBackendStopTimeout,
 		logger:         logger,
 	})
@@ -80,7 +90,11 @@ func Run(ctx context.Context, config Config) error {
 		return errors.Join(backend.stop(), metadataDatabase.Stop())
 	case <-backend.exited:
 		return errors.Join(
-			fmt.Errorf("the backend exited: %w", backend.exitErr),
+			fmt.Errorf(
+				"the backend exited: %w; its last output:\n%s",
+				backend.exitErr,
+				backend.outputTail.GetContents(),
+			),
 			metadataDatabase.Stop(),
 		)
 	case databaseErr := <-metadataDatabase.GetUnexpectedExitChannel():

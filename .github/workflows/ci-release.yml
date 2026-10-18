@@ -358,7 +358,7 @@ jobs:
   test-windows-launcher:
     if: github.ref != 'refs/heads/develop'
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     needs: [lint-backend]
     steps:
       - name: Check out code
@@ -372,7 +372,21 @@ jobs:
 
       - name: Test the launcher against the bundled PostgreSQL server
         working-directory: backend
-        run: go test -count=1 -v ./internal/launcher/...
+        run: go test -count=1 -v ./internal/launcher/... ./internal/util/stopevent/...
+
+      - name: Build the backend and the launcher
+        working-directory: backend
+        run: |
+          go install github.com/swaggo/swag/cmd/swag@v1.16.4
+          swag init -d . -g cmd/main.go -o swagger
+          go build -o databasus.exe ./cmd
+          go build -o databasus-launcher.exe ./cmd/launcher
+
+      # The runner is an administrator, so this registers a real service running as LocalSystem,
+      # which also exercises the metadata server's privilege drop.
+      - name: Run the Windows service lifecycle test
+        shell: pwsh
+        run: ./e2e/windows-service/run.ps1 -LauncherPath backend/databasus-launcher.exe -DataDir "$env:RUNNER_TEMP\databasus-service-data"
 
   test-filesystems:
     runs-on: ubuntu-latest

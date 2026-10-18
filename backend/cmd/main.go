@@ -8,10 +8,8 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"os/signal"
 	"path/filepath"
 	"runtime/debug"
-	"syscall"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -344,7 +342,7 @@ func startServerWithGracefulShutdown(log *slog.Logger, app *gin.Engine) {
 	}()
 
 	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+	notifyOnShutdownRequest(log, quit)
 	<-quit
 	log.Info("shutdown signal received")
 
@@ -449,7 +447,7 @@ func runBackgroundTasks(log *slog.Logger) {
 
 	// Set up signal handling for graceful shutdown
 	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+	notifyOnShutdownRequest(log, quit)
 	go func() {
 		<-quit
 		log.Info("shutdown signal received, cancelling all background tasks")
