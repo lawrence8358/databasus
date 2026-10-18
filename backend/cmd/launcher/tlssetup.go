@@ -23,9 +23,8 @@ const (
 	tlsSourceExisting   = "existing"
 )
 
-// setUpTLS stores the HTTPS certificate the -https flag serves, or checks the stored one. It
-// prints the certificate (subject, names, expiry, fingerprint) on success, and one line in words
-// meant for the person running the installer on failure.
+// The installer logs the certificate summary this prints, or shows its one-line failure to the
+// person running Setup.
 func setUpTLS(arguments []string) int {
 	flags := flag.NewFlagSet("databasus-launcher tls-setup", flag.ContinueOnError)
 
@@ -44,9 +43,7 @@ func setUpTLS(arguments []string) int {
 
 	summary, err := runTLSSetup(*dataFolder, *source, *pfxFile, *isCheckOnly, time.Now().UTC())
 	if err != nil {
-		_, _ = fmt.Fprintln(os.Stdout, err)
-
-		return 1
+		return failWith(os.Stdout, err)
 	}
 
 	_, _ = fmt.Fprintln(os.Stdout, summary.String())

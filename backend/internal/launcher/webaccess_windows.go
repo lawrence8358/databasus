@@ -27,7 +27,7 @@ func prepareWebTLS(config Config, logger *slog.Logger) (*webtls.Files, error) {
 		return nil, nil
 	}
 
-	now := time.Now()
+	now := time.Now().UTC()
 
 	summary, err := webtls.Check(config.DataFolder, now)
 	if err != nil {
@@ -46,8 +46,7 @@ func prepareWebTLS(config Config, logger *slog.Logger) (*webtls.Files, error) {
 	return &files, nil
 }
 
-// isLoopbackHost reports whether a listen host keeps the Web UI on this computer. An empty host
-// means every interface.
+// An empty host means every interface.
 func isLoopbackHost(host string) bool {
 	if strings.EqualFold(host, "localhost") {
 		return true

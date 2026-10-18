@@ -48,8 +48,6 @@ func GetFiles(dataFolder string) Files {
 	}
 }
 
-// Check loads the stored certificate and key and fails when they are missing, do not match or the
-// certificate is outside its validity period.
 func Check(dataFolder string, now time.Time) (Summary, error) {
 	files := GetFiles(dataFolder)
 

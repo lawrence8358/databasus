@@ -25,7 +25,6 @@ func GetFilePath(dataFolder string) string {
 	return filepath.Join(dataFolder, FileName)
 }
 
-// Save stores the connection string; on Windows only SYSTEM, Administrators and readers can open it.
 func Save(dataFolder, dsn string, readers securefile.Readers) error {
 	dsn = strings.TrimSpace(dsn)
 	if dsn == "" {
@@ -39,7 +38,6 @@ func Save(dataFolder, dsn string, readers securefile.Readers) error {
 	return securefile.WriteFileFor(GetFilePath(dataFolder), []byte(dsn), 0o600, readers)
 }
 
-// Load reads a stored connection string.
 func Load(path string) (string, error) {
 	content, err := os.ReadFile(path)
 	if err != nil {
@@ -54,9 +52,8 @@ func Load(path string) (string, error) {
 	return dsn, nil
 }
 
-// TestConnection checks that the server accepts the credentials and can take writes. Errors never
-// contain the password.
-func TestConnection(ctx context.Context, dsn string) error {
+// A read-only standby is refused, since the backend writes. Errors never contain the password.
+func VerifyConnection(ctx context.Context, dsn string) error {
 	config, err := pgx.ParseConfig(dsn)
 	if err != nil {
 		return fmt.Errorf("the connection string is not valid: %s", scrub(err.Error(), dsn, ""))

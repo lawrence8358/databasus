@@ -43,7 +43,12 @@ func Test_Check_WhenNoCertificateIsStored_ReturnsError(t *testing.T) {
 
 func Test_Check_WhenCertificateHasExpired_ReturnsError(t *testing.T) {
 	dataFolder := t.TempDir()
-	_, err := GenerateSelfSigned(dataFolder, HostNames{DNSNames: []string{"localhost"}}, testNow, securefile.CurrentAccount)
+	_, err := GenerateSelfSigned(
+		dataFolder,
+		HostNames{DNSNames: []string{"localhost"}},
+		testNow,
+		securefile.CurrentAccount,
+	)
 	require.NoError(t, err)
 
 	_, err = Check(dataFolder, testNow.Add(6*365*24*time.Hour))
@@ -70,7 +75,12 @@ func Test_ImportPfx_WhenPfxUsesModernEncryption_StoresChainAndKey(t *testing.T) 
 
 func Test_ImportPfx_WhenPasswordIsWrong_KeepsPreviousCertificate(t *testing.T) {
 	dataFolder := t.TempDir()
-	previous, err := GenerateSelfSigned(dataFolder, HostNames{DNSNames: []string{"localhost"}}, testNow, securefile.CurrentAccount)
+	previous, err := GenerateSelfSigned(
+		dataFolder,
+		HostNames{DNSNames: []string{"localhost"}},
+		testNow,
+		securefile.CurrentAccount,
+	)
 	require.NoError(t, err)
 
 	_, err = ImportPfx(dataFolder, createTestPfx(t, "s3cret", testNow), "wrong", testNow, securefile.CurrentAccount)

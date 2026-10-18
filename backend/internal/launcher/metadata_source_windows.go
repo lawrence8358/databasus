@@ -69,7 +69,7 @@ func useExternalMetadataDatabase(ctx context.Context, dsnFile string, logger *sl
 		return nil, err
 	}
 
-	if err := externaldb.TestConnection(ctx, dsn); err != nil {
+	if err := externaldb.VerifyConnection(ctx, dsn); err != nil {
 		return nil, err
 	}
 

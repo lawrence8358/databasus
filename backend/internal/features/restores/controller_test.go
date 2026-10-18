@@ -594,10 +594,10 @@ func Test_CheckRestoreCompatibility_ByDumpClientVersion_ReportsWhetherTargetIsOl
 		},
 	}
 
-	tests := []struct {
+	dumpClientCases := []struct {
 		name                   string
 		dumpClientMajorVersion int
-		expectWarning          bool
+		isWarningExpected      bool
 	}{
 		{"target older than dump client", 18, true},
 		{"target one major older than dump client", 17, true},
@@ -606,9 +606,9 @@ func Test_CheckRestoreCompatibility_ByDumpClientVersion_ReportsWhetherTargetIsOl
 		{"dump client version unknown", 0, false},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			backup.DumpClientMajorVersion = tt.dumpClientMajorVersion
+	for _, dumpClientCase := range dumpClientCases {
+		t.Run(dumpClientCase.name, func(t *testing.T) {
+			backup.DumpClientMajorVersion = dumpClientCase.dumpClientMajorVersion
 			repo := &backups_core_logical.BackupRepository{}
 			assert.NoError(t, repo.Save(backup))
 
@@ -623,8 +623,8 @@ func Test_CheckRestoreCompatibility_ByDumpClientVersion_ReportsWhetherTargetIsOl
 				&response,
 			)
 
-			assert.Equal(t, tt.expectWarning, response.IsTargetOlderThanDumpClient)
-			assert.Equal(t, tt.dumpClientMajorVersion, response.DumpClientMajorVersion)
+			assert.Equal(t, dumpClientCase.isWarningExpected, response.IsTargetOlderThanDumpClient)
+			assert.Equal(t, dumpClientCase.dumpClientMajorVersion, response.DumpClientMajorVersion)
 			assert.Equal(t, 16, response.TargetMajorVersion)
 		})
 	}

@@ -27,8 +27,6 @@ const (
 	serviceAccountDescription = "the Databasus service account (LocalSystem)"
 )
 
-// CheckServiceCanWriteFolder returns nil when folder is an absolute path on a local fixed disk
-// that the service account can create (if missing) and write to.
 func CheckServiceCanWriteFolder(folder string) error {
 	serviceAccount, err := windows.CreateWellKnownSid(windows.WinLocalSystemSid)
 	if err != nil {

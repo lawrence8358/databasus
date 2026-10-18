@@ -26,7 +26,6 @@ func WriteFile(path string, data []byte, perm os.FileMode) error {
 	return WriteFileFor(path, data, perm, CurrentAccount)
 }
 
-// WriteFileFor is WriteFile with an explicit choice of readers.
 func WriteFileFor(path string, data []byte, perm os.FileMode, readers Readers) error {
 	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
 	if err != nil {
@@ -55,7 +54,6 @@ func RestrictDir(path string, perm os.FileMode) error {
 	return RestrictDirFor(path, perm, CurrentAccount)
 }
 
-// RestrictDirFor is RestrictDir with an explicit choice of readers.
 func RestrictDirFor(path string, perm os.FileMode, readers Readers) error {
 	if err := os.Chmod(path, perm); err != nil {
 		return err

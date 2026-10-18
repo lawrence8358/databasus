@@ -38,7 +38,6 @@ func GetBackendRoot() string {
 	}
 }
 
-// GetDataFolder returns the folder for the secret key, the instance file and the log.
 func GetDataFolder() string {
 	if dataFolder, isSet := lookupFolder(DataFolderEnvVariable); isSet {
 		return dataFolder
@@ -47,7 +46,6 @@ func GetDataFolder() string {
 	return filepath.Join(filepath.Dir(GetBackendRoot()), "databasus-data")
 }
 
-// GetBackupsFolder returns the folder where local storage keeps backup files.
 func GetBackupsFolder() string {
 	if backupsFolder, isSet := lookupFolder(BackupsFolderEnvVariable); isSet {
 		return backupsFolder

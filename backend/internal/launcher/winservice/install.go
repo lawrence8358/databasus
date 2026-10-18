@@ -179,9 +179,9 @@ func stopAndWait(service *mgr.Service, timeout time.Duration) error {
 		}
 	}
 
-	deadline := time.Now().Add(timeout)
+	deadline := time.Now().UTC().Add(timeout)
 
-	for time.Now().Before(deadline) {
+	for time.Now().UTC().Before(deadline) {
 		status, err = service.Query()
 		if err != nil {
 			return fmt.Errorf("query the %s service: %w", Name, err)

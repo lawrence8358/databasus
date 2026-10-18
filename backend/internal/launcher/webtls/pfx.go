@@ -42,7 +42,6 @@ func ParsePfx(pfxData []byte, password string, now time.Time) (certPEM, keyPEM [
 	return certPEM, keyPEM, summarize(leaf), nil
 }
 
-// ImportPfx replaces the stored certificate with the one in the PFX file.
 func ImportPfx(
 	dataFolder string,
 	pfxData []byte,

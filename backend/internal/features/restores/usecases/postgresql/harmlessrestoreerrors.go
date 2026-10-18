@@ -13,8 +13,8 @@ const ignoredErrorsMarker = "errors ignored on restore:"
 // every ignored error is accounted for and each one is listed here with the reason it is harmless.
 var harmlessRestoreErrors = []string{
 	// A backup taken with include-schemas selects public explicitly, so pg_dump emits CREATE SCHEMA
-	// public and every restore target already owns that schema (issue #726). A --clean restore never
-	// reaches here, since the DROP removes the collision first.
+	// public, and every restore target already owns that schema. A --clean restore never reaches
+	// here, since the DROP removes the collision first.
 	`schema "public" already exists`,
 
 	// pg_restore 17 and later disables transaction_timeout at the start of its session. A server

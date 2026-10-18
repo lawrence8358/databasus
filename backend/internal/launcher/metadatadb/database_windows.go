@@ -28,8 +28,7 @@ type Database struct {
 	stopErr         error
 }
 
-// Start returns once the server accepts connections with the returned database's credentials. ctx
-// bounds startup only; the server keeps running until Stop.
+// ctx bounds startup only; the server keeps running until Stop.
 func Start(ctx context.Context, settings Settings) (*Database, error) {
 	settings, err := settings.withDefaults()
 	if err != nil {

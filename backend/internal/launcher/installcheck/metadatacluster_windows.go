@@ -10,10 +10,8 @@ import (
 	"strings"
 )
 
-// CheckMetadataClusterMajor returns nil when dataFolder holds no metadata database yet, or holds
-// one that the bundled PostgreSQL major can run. An upgrade only swaps the server binaries, so a
-// cluster of another major would make the service fail at start; the installer refuses before it
-// stops the service or touches any file.
+// An upgrade only swaps the server binaries, so a cluster of another major would make the service
+// fail at start; the installer refuses before it stops the service or touches any file.
 func CheckMetadataClusterMajor(dataFolder, bundledMajor string) error {
 	versionFile := filepath.Join(dataFolder, "pgdata", "PG_VERSION")
 

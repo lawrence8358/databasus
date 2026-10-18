@@ -17,9 +17,8 @@ import (
 // line is readable by other users and ends up in logs.
 const installerDsnEnvVariable = "DATABASUS_INSTALLER_EXTERNAL_DB_DSN"
 
-// testExternalDb checks the connection string from the environment, or from -file when the
-// installer reuses the one stored by an earlier install. Prints the problem and exits 1 on failure.
-func testExternalDb(arguments []string) int {
+// The -file form lets the installer reuse the string stored by an earlier install.
+func verifyExternalDb(arguments []string) int {
 	flags := flag.NewFlagSet("databasus-launcher test-external-db", flag.ContinueOnError)
 	file := flags.String("file", "", "read the connection string from this file instead of the environment")
 
@@ -29,22 +28,18 @@ func testExternalDb(arguments []string) int {
 
 	dsn, err := readInstallerDsn(*file)
 	if err != nil {
-		fmt.Fprintln(os.Stdout, err)
-
-		return 1
+		return failWith(os.Stdout, err)
 	}
 
-	if err := externaldb.TestConnection(context.Background(), dsn); err != nil {
-		fmt.Fprintln(os.Stdout, err)
-
-		return 1
+	if err := externaldb.VerifyConnection(context.Background(), dsn); err != nil {
+		return failWith(os.Stdout, err)
 	}
 
 	return 0
 }
 
-// saveExternalDb stores the connection string from the environment (or -file) in the data folder, readable
-// only by the service account and administrators.
+// The installer runs this as an administrator for the LocalSystem service, so the stored file leaves
+// the installing account out of its ACL.
 func saveExternalDb(arguments []string) int {
 	flags := flag.NewFlagSet("databasus-launcher save-external-db", flag.ContinueOnError)
 	dataFolder := flags.String("data-dir", "", "program data folder the service will use")
@@ -55,22 +50,18 @@ func saveExternalDb(arguments []string) int {
 	}
 
 	if *dataFolder == "" {
-		fmt.Fprintln(os.Stderr, "-data-dir is required")
+		_, _ = fmt.Fprintln(os.Stderr, "-data-dir is required")
 
 		return 2
 	}
 
 	dsn, err := readInstallerDsn(*file)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-
-		return 1
+		return failWith(os.Stderr, err)
 	}
 
 	if err := externaldb.Save(*dataFolder, dsn, securefile.ServiceOnly); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-
-		return 1
+		return failWith(os.Stderr, err)
 	}
 
 	fmt.Printf("the connection string is stored in %s\n", externaldb.GetFilePath(*dataFolder))

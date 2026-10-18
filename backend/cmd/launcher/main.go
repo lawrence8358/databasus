@@ -8,6 +8,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 
 	"databasus-backend/internal/launcher/winservice"
@@ -50,7 +51,7 @@ func run() int {
 		case "tls-setup":
 			return setUpTLS(os.Args[2:])
 		case "test-external-db":
-			return testExternalDb(os.Args[2:])
+			return verifyExternalDb(os.Args[2:])
 		case "save-external-db":
 			return saveExternalDb(os.Args[2:])
 		}
@@ -58,9 +59,7 @@ func run() int {
 
 	isService, err := winservice.IsRunningAsService()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "cannot tell whether this runs as a service: %v\n", err)
-
-		return 1
+		return failWith(os.Stderr, fmt.Errorf("cannot tell whether this runs as a service: %w", err))
 	}
 
 	if isService {
@@ -68,4 +67,12 @@ func run() int {
 	}
 
 	return runInConsole(os.Args[1:])
+}
+
+// failWith prints err on its own line, which the installer shows to the person running it, and
+// returns the exit code of a failed command.
+func failWith(output io.Writer, err error) int {
+	_, _ = fmt.Fprintln(output, err)
+
+	return 1
 }

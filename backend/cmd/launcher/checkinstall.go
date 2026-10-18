@@ -11,8 +11,8 @@ import (
 	"databasus-backend/internal/util/tools"
 )
 
-// checkInstall is run by the installer before it installs anything. It prints one line per
-// problem, in words meant for the person running the installer, and exits 1 if there is any.
+// The installer runs this before it installs anything and shows each printed line, so problems are
+// worded for the person running Setup.
 func checkInstall(arguments []string) int {
 	flags := flag.NewFlagSet("databasus-launcher check-install", flag.ContinueOnError)
 
