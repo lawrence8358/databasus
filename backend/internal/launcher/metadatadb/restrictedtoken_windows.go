@@ -3,6 +3,7 @@ package metadatadb
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"syscall"
 	"unsafe"
@@ -25,6 +26,8 @@ func newRestrictedCommand(ctx context.Context, programPath string, arguments ...
 	}
 
 	command := exec.CommandContext(ctx, programPath, arguments...)
+	// initdb and pg_ctl restrict themselves again unless told the token is restricted already.
+	command.Env = append(os.Environ(), "PG_RESTRICT_EXEC=1")
 	command.SysProcAttr = &syscall.SysProcAttr{
 		Token:         syscall.Token(restrictedToken),
 		HideWindow:    true,
@@ -79,7 +82,71 @@ func createRestrictedToken() (windows.Token, error) {
 		return 0, fmt.Errorf("create restricted token: %w", callErr)
 	}
 
+	if err := grantTokenUserInDefaultDacl(restrictedToken); err != nil {
+		_ = restrictedToken.Close()
+
+		return 0, err
+	}
+
 	return restrictedToken, nil
+}
+
+// tokenDefaultDacl mirrors TOKEN_DEFAULT_DACL.
+type tokenDefaultDacl struct {
+	DefaultDacl *windows.ACL
+}
+
+// An elevated administrator's token gives its default DACL, and so every object the restricted
+// process creates (its own token, child processes such as initdb's postgres), only to
+// Administrators and SYSTEM. With Administrators set to deny-only the process could then not
+// open its own token or its children. pg_ctl adds the token user for the same reason
+// (AddUserToTokenDacl). Under LocalSystem the user is SYSTEM, so this changes nothing there.
+func grantTokenUserInDefaultDacl(token windows.Token) error {
+	tokenUser, err := token.GetTokenUser()
+	if err != nil {
+		return fmt.Errorf("read the restricted token user: %w", err)
+	}
+
+	var size uint32
+	_ = windows.GetTokenInformation(token, windows.TokenDefaultDacl, nil, 0, &size)
+	if size == 0 {
+		return fmt.Errorf("read the restricted token default DACL size")
+	}
+
+	buffer := make([]byte, size)
+	if err := windows.GetTokenInformation(token, windows.TokenDefaultDacl, &buffer[0], size, &size); err != nil {
+		return fmt.Errorf("read the restricted token default DACL: %w", err)
+	}
+
+	currentDacl := (*tokenDefaultDacl)(unsafe.Pointer(&buffer[0])).DefaultDacl
+
+	newDacl, err := windows.ACLFromEntries([]windows.EXPLICIT_ACCESS{{
+		AccessPermissions: windows.GENERIC_ALL,
+		AccessMode:        windows.GRANT_ACCESS,
+		Inheritance:       windows.OBJECT_INHERIT_ACE,
+		Trustee: windows.TRUSTEE{
+			TrusteeForm:  windows.TRUSTEE_IS_SID,
+			TrusteeType:  windows.TRUSTEE_IS_USER,
+			TrusteeValue: windows.TrusteeValueFromSID(tokenUser.User.Sid),
+		},
+	}}, currentDacl)
+	if err != nil {
+		return fmt.Errorf("build the restricted token default DACL: %w", err)
+	}
+
+	newDefault := tokenDefaultDacl{DefaultDacl: newDacl}
+
+	err = windows.SetTokenInformation(
+		token,
+		windows.TokenDefaultDacl,
+		(*byte)(unsafe.Pointer(&newDefault)),
+		uint32(unsafe.Sizeof(newDefault)),
+	)
+	if err != nil {
+		return fmt.Errorf("set the restricted token default DACL: %w", err)
+	}
+
+	return nil
 }
 
 func startRestricted(command *exec.Cmd) error {
