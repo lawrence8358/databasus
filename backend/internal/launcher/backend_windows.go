@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -14,6 +15,7 @@ import (
 	"golang.org/x/sys/windows"
 
 	"databasus-backend/internal/util/locations"
+	"databasus-backend/internal/util/stopevent"
 )
 
 const (
@@ -23,6 +25,7 @@ const (
 
 type backendProcess struct {
 	command     *exec.Cmd
+	stopEvent   *stopevent.Event
 	exited      chan struct{}
 	exitErr     error
 	logger      *slog.Logger
@@ -34,26 +37,36 @@ type backendStartSpec struct {
 	metadataDsn    string
 	dataFolder     string
 	backupsFolder  string
+	output         io.Writer
 	stopTimeout    time.Duration
 	logger         *slog.Logger
 }
 
-// The backend runs in its own process group so a Ctrl+C typed in the console reaches only the
-// launcher, which then stops the backend before the database instead of both at once.
 func startBackend(ctx context.Context, spec backendStartSpec) (*backendProcess, error) {
+	stopEvent, err := stopevent.New()
+	if err != nil {
+		return nil, err
+	}
+
 	command := exec.CommandContext(context.WithoutCancel(ctx), spec.executablePath)
 	command.Dir = filepath.Dir(spec.executablePath)
-	command.Env = buildBackendEnvironment(spec)
-	command.Stdout = os.Stdout
-	command.Stderr = os.Stderr
-	command.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.CREATE_NEW_PROCESS_GROUP}
+	command.Env = append(buildBackendEnvironment(spec), stopEvent.GetEnvironmentEntry())
+	command.Stdout = spec.output
+	command.Stderr = spec.output
+	command.SysProcAttr = &syscall.SysProcAttr{
+		CreationFlags:              getBackendCreationFlags(),
+		AdditionalInheritedHandles: []syscall.Handle{stopEvent.GetHandle()},
+	}
 
 	if err := command.Start(); err != nil {
+		_ = stopEvent.Close()
+
 		return nil, fmt.Errorf("start the backend %s: %w", spec.executablePath, err)
 	}
 
 	backend := &backendProcess{
 		command:     command,
+		stopEvent:   stopEvent,
 		exited:      make(chan struct{}),
 		logger:      spec.logger,
 		stopTimeout: spec.stopTimeout,
@@ -65,6 +78,18 @@ func startBackend(ctx context.Context, spec backendStartSpec) (*backendProcess, 
 	}()
 
 	return backend, nil
+}
+
+// With a console, the backend gets its own process group so a Ctrl+C typed there reaches only
+// the launcher, which then stops the backend before the database. Without one (a service), the
+// backend must not get a console of its own: a console in the services session receives
+// CTRL_LOGOFF_EVENT whenever any user signs out, and Go turns that into SIGTERM.
+func getBackendCreationFlags() uint32 {
+	if _, err := windows.GetConsoleCP(); err != nil {
+		return windows.DETACHED_PROCESS
+	}
+
+	return windows.CREATE_NEW_PROCESS_GROUP
 }
 
 func buildBackendEnvironment(spec backendStartSpec) []string {
@@ -86,10 +111,9 @@ func buildBackendEnvironment(spec backendStartSpec) []string {
 	return environment
 }
 
-// The backend shuts down gracefully on os.Interrupt, which Go raises for CTRL_BREAK_EVENT. That
-// event only reaches processes sharing the launcher's console; without one it cannot be sent, and
-// the backend is killed instead.
 func (b *backendProcess) stop() error {
+	defer func() { _ = b.stopEvent.Close() }()
+
 	select {
 	case <-b.exited:
 		return nil
@@ -98,8 +122,7 @@ func (b *backendProcess) stop() error {
 
 	b.logger.Info("stopping the backend")
 
-	err := windows.GenerateConsoleCtrlEvent(windows.CTRL_BREAK_EVENT, uint32(b.command.Process.Pid))
-	if err != nil {
+	if err := b.stopEvent.Set(); err != nil {
 		b.logger.Warn("could not ask the backend to stop gracefully", "error", err)
 	} else {
 		select {
