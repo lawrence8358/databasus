@@ -27,6 +27,7 @@ import (
 	encryption_secrets "databasus-backend/internal/features/encryption/secrets"
 	restores_core "databasus-backend/internal/features/restores/core"
 	"databasus-backend/internal/features/storages"
+	"databasus-backend/internal/util/backupsfolder"
 	util_encryption "databasus-backend/internal/util/encryption"
 	io_utils "databasus-backend/internal/util/io"
 	"databasus-backend/internal/util/tools"
@@ -557,7 +558,7 @@ func (uc *RestorePostgresqlBackupUsecase) downloadBackupToTempFile(
 	storage *storages.Storage,
 ) (string, func(), error) {
 	// Create temporary directory for backup data
-	tempDir, err := os.MkdirTemp(config.GetEnv().TempFolder, "restore_"+uuid.New().String())
+	tempDir, err := os.MkdirTemp(backupsfolder.GetTempFolder(), "restore_"+uuid.New().String())
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to create temporary directory: %w", err)
 	}
@@ -1019,7 +1020,7 @@ func (uc *RestorePostgresqlBackupUsecase) generateFilteredTocList(
 	}
 
 	// Write filtered TOC to temporary file
-	tocFile, err := os.CreateTemp(config.GetEnv().TempFolder, "pg_restore_toc_*.list")
+	tocFile, err := os.CreateTemp(backupsfolder.GetTempFolder(), "pg_restore_toc_*.list")
 	if err != nil {
 		return "", fmt.Errorf("failed to create TOC list file: %w", err)
 	}

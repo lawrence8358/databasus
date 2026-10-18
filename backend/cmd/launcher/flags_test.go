@@ -35,3 +35,13 @@ func Test_ParseRunFlags_ByDefault_ListensOnLoopbackOverHTTP(t *testing.T) {
 	assert.Equal(t, "127.0.0.1", config.WebListenHost)
 	assert.False(t, config.IsHTTPS)
 }
+
+func Test_BuildServiceArguments_WithBackupsFolder_RefusesIt(t *testing.T) {
+	config, err := parseRunFlags([]string{"-data-dir", t.TempDir(), "-backups-dir", t.TempDir()})
+	require.NoError(t, err)
+
+	_, err = buildServiceArguments(config)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "backups-folder")
+}

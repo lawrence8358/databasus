@@ -3,6 +3,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -66,6 +67,13 @@ func parseRunFlags(arguments []string) (launcher.Config, error) {
 // A service starts in System32 with its own environment, so every path it gets is made absolute
 // at install time, and the environment-derived defaults are frozen into its command line.
 func buildServiceArguments(config launcher.Config) ([]string, error) {
+	if config.BackupsFolder != "" {
+		return nil, errors.New(
+			"-backups-dir is not stored in the service; set the backups folder with: " +
+				"databasus-launcher.exe backups-folder -data-dir <dir> -set <folder>",
+		)
+	}
+
 	dataFolder, err := filepath.Abs(config.DataFolder)
 	if err != nil {
 		return nil, fmt.Errorf("data folder: %w", err)
@@ -91,15 +99,6 @@ func buildServiceArguments(config launcher.Config) ([]string, error) {
 		}
 
 		arguments = append(arguments, "-external-metadata-db-file", dsnFile)
-	}
-
-	if config.BackupsFolder != "" {
-		backupsFolder, err := filepath.Abs(config.BackupsFolder)
-		if err != nil {
-			return nil, fmt.Errorf("backups folder: %w", err)
-		}
-
-		arguments = append(arguments, "-backups-dir", backupsFolder)
 	}
 
 	if config.IsHTTPS {

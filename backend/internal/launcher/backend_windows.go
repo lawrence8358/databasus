@@ -46,7 +46,7 @@ type backendStartSpec struct {
 	executablePath string
 	metadataDsn    string
 	dataFolder     string
-	backupsFolder  string
+	backupsFolder  backupsFolderSelection
 	webListenHost  string
 	webPort        int
 	// webTLSFiles is nil when the Web UI is served over plain HTTP.
@@ -129,8 +129,11 @@ func buildBackendEnvironment(spec backendStartSpec) []string {
 		webPortEnvVariable+"="+strconv.Itoa(spec.webPort),
 	)
 
-	if spec.backupsFolder != "" {
-		environment = append(environment, locations.BackupsFolderEnvVariable+"="+spec.backupsFolder)
+	if spec.backupsFolder.currentFolder != "" {
+		environment = append(environment,
+			locations.BackupsFolderEnvVariable+"="+spec.backupsFolder.currentFolder,
+			locations.BackupsFolderSettingsFileEnvVariable+"="+spec.backupsFolder.settingsFilePath,
+		)
 	}
 
 	if spec.webTLSFiles != nil {

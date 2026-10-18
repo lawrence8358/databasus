@@ -13,6 +13,10 @@ const (
 	DataFolderEnvVariable    = "DATABASUS_DATA_DIR"
 	BackupsFolderEnvVariable = "DATABASUS_BACKUPS_DIR"
 	TempFolderEnvVariable    = "DATABASUS_TEMP_DIR"
+	// BackupsFolderSettingsFileEnvVariable names the file that records the backups folder an
+	// administrator chose after installation. The Windows launcher sets it; without it the backups
+	// folder is fixed for the life of the process.
+	BackupsFolderSettingsFileEnvVariable = "DATABASUS_BACKUPS_FOLDER_FILE"
 )
 
 // GetBackendRoot returns the nearest directory above the working directory that holds go.mod. A

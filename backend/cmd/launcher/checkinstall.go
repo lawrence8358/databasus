@@ -18,6 +18,7 @@ func checkInstall(arguments []string) int {
 
 	dataFolder := flags.String("data-dir", "", "program data folder the service will use")
 	backupsFolder := flags.String("backups-dir", "", "backups folder the service will use")
+	installFolder := flags.String("install-dir", "", "program folder; the backups folder must stay out of it")
 	port := flags.Int("port", 0, "Web UI port; 0 skips the port check")
 	isExternalMetadataDb := flags.Bool(
 		"external-metadata-db",
@@ -31,16 +32,19 @@ func checkInstall(arguments []string) int {
 
 	var problems []string
 
-	for _, folder := range []struct{ name, path string }{
-		{"Program data folder", *dataFolder},
-		{"Backups folder", *backupsFolder},
-	} {
-		if folder.path == "" {
-			continue
+	if *dataFolder != "" {
+		if err := installcheck.CheckServiceCanWriteFolder(*dataFolder); err != nil {
+			problems = append(problems, fmt.Sprintf("Program data folder: %v", err))
 		}
+	}
 
-		if err := installcheck.CheckServiceCanWriteFolder(folder.path); err != nil {
-			problems = append(problems, fmt.Sprintf("%s: %v", folder.name, err))
+	if *backupsFolder != "" {
+		err := installcheck.CheckBackupsFolder(*backupsFolder, installcheck.OwnFolders{
+			DataFolder:    *dataFolder,
+			InstallFolder: *installFolder,
+		})
+		if err != nil {
+			problems = append(problems, fmt.Sprintf("Backups folder: %v", err))
 		}
 	}
 

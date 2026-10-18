@@ -7,14 +7,13 @@ import (
 
 	"github.com/shirou/gopsutil/v4/disk"
 
-	"databasus-backend/internal/config"
+	"databasus-backend/internal/util/backupsfolder"
 )
 
 type DiskService struct{}
 
 func (s *DiskService) GetDiskUsage(ctx context.Context) (*DiskUsage, error) {
-	cfg := config.GetEnv()
-	path := filepath.Dir(cfg.DataFolder) // Gets /databasus-data from /databasus-data/backups
+	path := filepath.Dir(backupsfolder.GetCurrentFolder()) // Gets /databasus-data from /databasus-data/backups
 
 	diskUsage, err := disk.Usage(path)
 	if err != nil {
