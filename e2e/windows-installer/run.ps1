@@ -247,7 +247,9 @@ INSERT INTO items SELECT i, 'item-' || i, i * 1.25 FROM generate_series(1, 5000)
     $restoreTarget.database = 'smoke_restored'
     Invoke-Api POST "/restores/$($backup.id)/restore" @{ postgresqlDatabase = $restoreTarget } $token | Out-Null
     $restoreStatus = Wait-ForStatus {
-        $statuses = @(Invoke-Api GET "/restores/$($backup.id)" $null $token | ForEach-Object status)
+        # Invoke-RestMethod returns a JSON array as one object; the pipeline unrolls it.
+        $restores = @(Invoke-Api GET "/restores/$($backup.id)" $null $token | ForEach-Object { $_ })
+        $statuses = @($restores | Where-Object { $null -ne $_ -and $_.PSObject.Properties['status'] } | ForEach-Object { $_.status })
         if ($statuses -contains 'COMPLETED') { 'COMPLETED' } elseif ($statuses -contains 'FAILED') { 'FAILED' } else { '' }
     } 'the restore to finish'
     if ($restoreStatus -ne 'COMPLETED') { throw "the restore ended $restoreStatus" }
