@@ -5,11 +5,11 @@ import (
 	"syscall"
 )
 
-// errorNotSameDevice is ERROR_NOT_SAME_DEVICE, which MoveFileEx returns when
+// errNotSameDevice is ERROR_NOT_SAME_DEVICE, which MoveFileEx returns when
 // a rename crosses drives. Go maps syscall.EXDEV on Windows to an invented
 // value no API call ever returns, so the Win32 code is checked instead.
-const errorNotSameDevice syscall.Errno = 17
+const errNotSameDevice syscall.Errno = 17
 
 func isCrossDeviceError(err error) bool {
-	return errors.Is(err, errorNotSameDevice)
+	return errors.Is(err, errNotSameDevice)
 }
