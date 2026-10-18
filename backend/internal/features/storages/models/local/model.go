@@ -231,6 +231,20 @@ func moveFile(src, dst string) error {
 		return err
 	}
 
+	if err = copyFileAndSync(src, dst); err != nil {
+		return err
+	}
+
+	// Windows refuses to delete a file that is still open, so the source is
+	// removed only after copyFileAndSync has closed both handles.
+	if err = os.Remove(src); err != nil {
+		return fmt.Errorf("failed to remove source file: %w", err)
+	}
+
+	return nil
+}
+
+func copyFileAndSync(src, dst string) error {
 	srcFile, err := os.Open(src)
 	if err != nil {
 		return fmt.Errorf("failed to open source file: %w", err)
@@ -253,10 +267,6 @@ func moveFile(src, dst string) error {
 
 	if err = dstFile.Sync(); err != nil {
 		return fmt.Errorf("failed to sync destination file: %w", err)
-	}
-
-	if err = os.Remove(src); err != nil {
-		return fmt.Errorf("failed to remove source file: %w", err)
 	}
 
 	return nil
