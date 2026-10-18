@@ -12,6 +12,9 @@
 ;                   metadata database (the string itself is not accepted on the command line, because
 ;                   Setup logs its command line); /BUNDLEDDB switches back to the bundled one. An upgrade
 ;                   keeps the earlier choice unless one of them is given.
+; Upgrade:          run a newer setup over the installed one; it keeps the earlier data folder,
+;                   backups folder and port (/DATADIR, /BACKUPSDIR and /PORT are ignored) and refuses,
+;                   before stopping the service, a metadata database of another PostgreSQL major.
 ; Silent uninstall: "<install dir>\unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES [/DELETEDATA]
 
 #ifndef AppVersion
