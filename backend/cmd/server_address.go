@@ -13,11 +13,18 @@ const (
 	listenHostEnvVariable = "DATABASUS_LISTEN_HOST"
 	portEnvVariable       = "DATABASUS_PORT"
 	defaultPort           = 4005
+
+	// When both are set the server speaks HTTPS only, with this PEM certificate chain and key; the
+	// Windows launcher sets them when the installer opened the Web UI to the local network.
+	tlsCertFileEnvVariable = "DATABASUS_TLS_CERT_FILE"
+	tlsKeyFileEnvVariable  = "DATABASUS_TLS_KEY_FILE"
 )
 
 type serverAddress struct {
-	host string
-	port int
+	host        string
+	port        int
+	tlsCertFile string
+	tlsKeyFile  string
 }
 
 func getServerAddress() (serverAddress, error) {
@@ -36,7 +43,22 @@ func getServerAddress() (serverAddress, error) {
 		address.port = port
 	}
 
+	address.tlsCertFile = os.Getenv(tlsCertFileEnvVariable)
+	address.tlsKeyFile = os.Getenv(tlsKeyFileEnvVariable)
+
+	if (address.tlsCertFile == "") != (address.tlsKeyFile == "") {
+		return serverAddress{}, fmt.Errorf(
+			"%s and %s must be set together",
+			tlsCertFileEnvVariable,
+			tlsKeyFileEnvVariable,
+		)
+	}
+
 	return address, nil
+}
+
+func (address serverAddress) isHTTPS() bool {
+	return address.tlsCertFile != ""
 }
 
 func (address serverAddress) getListenAddress() string {
@@ -50,5 +72,10 @@ func (address serverAddress) getLocalBaseURL() string {
 		host = "localhost"
 	}
 
-	return "http://" + net.JoinHostPort(host, strconv.Itoa(address.port))
+	scheme := "http://"
+	if address.isHTTPS() {
+		scheme = "https://"
+	}
+
+	return scheme + net.JoinHostPort(host, strconv.Itoa(address.port))
 }

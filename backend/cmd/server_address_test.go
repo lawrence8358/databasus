@@ -10,12 +10,15 @@ import (
 func Test_GetServerAddress_WhenNothingIsSet_ListensOnEveryInterfaceAt4005(t *testing.T) {
 	t.Setenv(listenHostEnvVariable, "")
 	t.Setenv(portEnvVariable, "")
+	t.Setenv(tlsCertFileEnvVariable, "")
+	t.Setenv(tlsKeyFileEnvVariable, "")
 
 	address, err := getServerAddress()
 
 	require.NoError(t, err)
 	assert.Equal(t, ":4005", address.getListenAddress())
 	assert.Equal(t, "http://localhost:4005", address.getLocalBaseURL())
+	assert.False(t, address.isHTTPS())
 }
 
 func Test_GetServerAddress_WhenHostAndPortAreSet_ListensOnlyThere(t *testing.T) {
@@ -47,5 +50,30 @@ func Test_GetServerAddress_WhenPortIsInvalid_ReturnsError(t *testing.T) {
 		_, err := getServerAddress()
 
 		assert.Error(t, err, invalidPort)
+	}
+}
+
+func Test_GetServerAddress_WhenCertificateAndKeyAreSet_UsesHTTPS(t *testing.T) {
+	t.Setenv(listenHostEnvVariable, "")
+	t.Setenv(portEnvVariable, "8443")
+	t.Setenv(tlsCertFileEnvVariable, "server.crt")
+	t.Setenv(tlsKeyFileEnvVariable, "server.key")
+
+	address, err := getServerAddress()
+
+	require.NoError(t, err)
+	assert.True(t, address.isHTTPS())
+	assert.Equal(t, "https://localhost:8443", address.getLocalBaseURL())
+}
+
+func Test_GetServerAddress_WhenOnlyCertificateOrKeyIsSet_ReturnsError(t *testing.T) {
+	for _, onlySet := range []string{tlsCertFileEnvVariable, tlsKeyFileEnvVariable} {
+		t.Setenv(tlsCertFileEnvVariable, "")
+		t.Setenv(tlsKeyFileEnvVariable, "")
+		t.Setenv(onlySet, "server.pem")
+
+		_, err := getServerAddress()
+
+		assert.Error(t, err, onlySet)
 	}
 }
