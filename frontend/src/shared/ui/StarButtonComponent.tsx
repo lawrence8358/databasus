@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useLocale } from '../i18n';
+import { getGitHubRepository, getGitHubRepositoryUrl, useLocale } from '../i18n';
 
 const StarIcon = () => (
   <svg
@@ -21,13 +21,14 @@ const StarIcon = () => (
 
 export function StarButtonComponent() {
   const { t } = useTranslation();
-  const { formatNumber } = useLocale();
+  const { formatNumber, locale } = useLocale();
+  const repository = getGitHubRepository(locale);
   const [starCount, setStarCount] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchStarCount = async () => {
     try {
-      const response = await fetch('https://api.github.com/repos/databasus/databasus');
+      const response = await fetch(`https://api.github.com/repos/${repository}`);
       if (response.ok) {
         const data = (await response.json()) as { stargazers_count: number };
         setStarCount(data.stargazers_count);
@@ -41,11 +42,11 @@ export function StarButtonComponent() {
 
   useEffect(() => {
     fetchStarCount();
-  }, []);
+  }, [repository]);
 
   return (
     <a
-      href="https://github.com/databasus/databasus"
+      href={getGitHubRepositoryUrl(locale)}
       target="_blank"
       rel="noopener noreferrer"
       className="flex cursor-pointer items-center rounded-md border !border-gray-200 !bg-white text-sm !text-gray-700 transition-colors hover:!bg-gray-50 dark:!border-gray-600 dark:!bg-gray-700 dark:!text-gray-200 dark:hover:!bg-gray-600"

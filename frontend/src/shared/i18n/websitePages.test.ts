@@ -41,6 +41,11 @@ describe('getWebsitePageUrl', () => {
     expect(getWebsitePageUrl('sponsorship', 'ru')).toBe('https://databasus.com/sponsorship/');
   });
 
+  it('opens the English page for Chinese, because the website only has Simplified Chinese', () => {
+    expect(getWebsitePageUrl('installation', 'zh')).toBe('https://databasus.com/installation/');
+    expect(getWebsitePageUrl('home', 'zh')).toBe('https://databasus.com/');
+  });
+
   it('keeps the anchor of a section in every language', () => {
     expect(getWebsitePageUrl('accessManagementGlobalSettings', 'ru')).toBe(
       'https://databasus.com/ru/access-management/#global-settings',

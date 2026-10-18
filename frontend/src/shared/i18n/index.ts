@@ -6,4 +6,5 @@ export type { TranslationKey } from './TranslationKey';
 export { type LocalizedText, translateLocalizedText } from './LocalizedText';
 export { WEBSITE_PAGES, getWebsitePageUrl, type WebsitePageId } from './websitePages';
 export { translateApiError } from './translateApiError';
+export { getGitHubRepository, getGitHubRepositoryUrl } from './githubRepository';
 export { TransByKey } from './TransByKey';
