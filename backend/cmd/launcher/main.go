@@ -1,73 +1,50 @@
 //go:build windows
 
 // Command launcher runs Databasus on Windows without Docker: it starts the bundled metadata
-// PostgreSQL and the backend, and stops them in that reverse order on Ctrl+C.
+// PostgreSQL and the backend, and stops them in that reverse order. It runs in a console (stopped
+// with Ctrl+C) or as the Databasus Windows service, which its install and uninstall commands
+// register and remove.
 package main
 
 import (
-	"context"
-	"flag"
-	"log/slog"
+	"fmt"
 	"os"
-	"os/signal"
-	"path/filepath"
-	"syscall"
 
-	"databasus-backend/internal/launcher"
-	"databasus-backend/internal/launcher/metadatadb"
-	"databasus-backend/internal/util/locations"
+	"databasus-backend/internal/launcher/winservice"
 )
+
+const usage = `Usage:
+  databasus-launcher.exe [flags]            run in this console until Ctrl+C
+  databasus-launcher.exe install [flags]    register the Databasus service with these flags (administrator)
+  databasus-launcher.exe uninstall          stop and remove the Databasus service (administrator)
+
+Flags:
+`
 
 func main() {
 	os.Exit(run())
 }
 
 func run() int {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-
-	config := launcher.Config{Logger: logger}
-
-	flag.StringVar(&config.DataFolder, "data-dir", getDefaultDataFolder(),
-		"program data folder: metadata database, secret key, logs")
-	flag.StringVar(&config.BackupsFolder, "backups-dir", os.Getenv(locations.BackupsFolderEnvVariable),
-		`local folder for backups (default: <data-dir>\backups)`)
-	flag.IntVar(&config.MetadataDbPort, "metadata-db-port", metadatadb.DefaultPort,
-		"port of the bundled metadata PostgreSQL on 127.0.0.1")
-	flag.StringVar(&config.BackendExecutable, "backend", getDefaultBackendExecutable(),
-		"path to databasus.exe")
-	flag.Parse()
-
-	if err := launcher.BindChildProcessesToLauncherLifetime(); err != nil {
-		logger.Error("could not tie child processes to the launcher", "error", err)
-		return 1
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "install":
+			return installService(os.Args[2:])
+		case "uninstall":
+			return uninstallService()
+		}
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
-	if err := launcher.Run(ctx, config); err != nil {
-		logger.Error("Databasus stopped", "error", err)
-		return 1
-	}
-
-	logger.Info("Databasus stopped")
-
-	return 0
-}
-
-func getDefaultDataFolder() string {
-	if dataFolder := os.Getenv(locations.DataFolderEnvVariable); dataFolder != "" {
-		return dataFolder
-	}
-
-	return filepath.Join(os.Getenv("ProgramData"), "Databasus")
-}
-
-func getDefaultBackendExecutable() string {
-	executablePath, err := os.Executable()
+	isService, err := winservice.IsRunningAsService()
 	if err != nil {
-		return "databasus.exe"
+		fmt.Fprintf(os.Stderr, "cannot tell whether this runs as a service: %v\n", err)
+
+		return 1
 	}
 
-	return filepath.Join(filepath.Dir(executablePath), "databasus.exe")
+	if isService {
+		return runAsService(os.Args[1:])
+	}
+
+	return runInConsole(os.Args[1:])
 }
