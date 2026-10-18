@@ -12,6 +12,7 @@ import (
 	"databasus-backend/internal/config"
 	user_models "databasus-backend/internal/features/users/models"
 	"databasus-backend/internal/storage"
+	"databasus-backend/internal/util/securefile"
 )
 
 type SecretKeyService struct {
@@ -38,7 +39,7 @@ func (s *SecretKeyService) MigrateKeyFromDbToFileIfExist() error {
 		return fmt.Errorf("failed to create secret key directory: %w", err)
 	}
 
-	if err := os.WriteFile(secretKeyPath, []byte(secretKey.Secret), 0o600); err != nil {
+	if err := securefile.WriteFile(secretKeyPath, []byte(secretKey.Secret), 0o600); err != nil {
 		return fmt.Errorf("failed to write secret key to file: %w", err)
 	}
 
@@ -63,7 +64,7 @@ func (s *SecretKeyService) GetSecretKey() (string, error) {
 				return "", fmt.Errorf("failed to create secret key directory: %w", err)
 			}
 
-			if err := os.WriteFile(secretKeyPath, []byte(newKey), 0o600); err != nil {
+			if err := securefile.WriteFile(secretKeyPath, []byte(newKey), 0o600); err != nil {
 				return "", fmt.Errorf("failed to write new secret key: %w", err)
 			}
 			s.cachedKey = &newKey

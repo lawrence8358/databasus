@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"databasus-backend/internal/util/securefile"
 )
 
 type Instance struct {
@@ -72,7 +74,7 @@ func (l *InstanceFileLoader) LoadOrCreate() (*Instance, bool) {
 		return nil, false
 	}
 
-	if err := os.WriteFile(l.path, encoded, 0o600); err != nil {
+	if err := securefile.WriteFile(l.path, encoded, 0o600); err != nil {
 		l.logger.Warn("failed to write telemetry instance file; skipping telemetry",
 			"path", l.path, "error", err)
 		return nil, false
