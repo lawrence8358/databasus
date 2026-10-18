@@ -18,6 +18,7 @@ import {
   type RestoreCompatibility,
   RestoreStatus,
   restoreApi,
+  shouldWarnAboutOlderRestoreTarget,
 } from '../../../entity/restores';
 import { translateApiError, useLocale } from '../../../shared/i18n';
 import { ClipboardHelper } from '../../../shared/lib/ClipboardHelper';
@@ -138,7 +139,7 @@ export const RestoresComponent = ({ database, backup }: Props) => {
           postgresql: editingDatabase.postgresqlLogical,
         });
 
-        if (compatibility.isTargetOlderThanDumpClient) {
+        if (shouldWarnAboutOlderRestoreTarget(compatibility, database.postgresqlLogical?.version)) {
           setOlderTargetWarning({ database: editingDatabase, compatibility });
           return;
         }
