@@ -9,8 +9,7 @@ import (
 	"strconv"
 )
 
-// CheckPortIsFree returns nil when nothing listens on the port, either on the loopback address or
-// on every interface, the two places the Web UI can listen.
+// Both the loopback address and every interface are checked, the two places the Web UI can listen.
 func CheckPortIsFree(port int) error {
 	if port < 1 || port > 65535 {
 		return fmt.Errorf("the port must be from 1 to 65535, got %d", port)

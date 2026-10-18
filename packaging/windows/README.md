@@ -112,6 +112,10 @@ another PostgreSQL major version than the one the new version bundles, Setup sto
 new major needs `pg_upgrade`, which Setup does not do. Within one major (for example 18.4 to 18.6)
 the new binaries simply run the existing data.
 
+Setup also refuses to install an older version over a newer one (exit code `7` when silent), because
+the newer version may already have migrated the metadata database. Versions compare by
+major.minor.patch. Development and CI builds (`0.0.0-<suffix>`) skip this check.
+
 Otherwise Setup stops the service, replaces the program files (the `migrations`, `ui\build` and
 bundled PostgreSQL folders as a whole, so nothing of the old version lingers), updates the service
 registration and starts it again. The backend applies the new metadata migrations at that start,
@@ -122,7 +126,10 @@ all backups stay.
 
 From Apps & features, or `"<install dir>\unins000.exe"`. The program data folder and the backups
 folder stay on disk unless you choose to delete all data, which asks a second time because without
-the secret key encrypted settings and backups cannot be recovered. Silently:
+the secret key encrypted settings and backups cannot be recovered. The program data folder is
+deleted as a whole. The backups folder may be shared with other programs, so only the files Databasus
+named there (backups, their sidecars and WAL segments, plus its own `temp` and `wal-queue` entries)
+are deleted, and the folder itself only when nothing else is left in it. Silently:
 
 ```powershell
 & "C:\Program Files\Databasus\unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES             # keeps the data

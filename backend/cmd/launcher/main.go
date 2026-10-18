@@ -8,6 +8,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 
 	"databasus-backend/internal/launcher/winservice"
@@ -20,7 +21,7 @@ const usage = `Usage:
   databasus-launcher.exe [flags]            run in this console until Ctrl+C
   databasus-launcher.exe install [flags]    register the Databasus service with these flags (administrator)
   databasus-launcher.exe uninstall          stop and remove the Databasus service (administrator)
-  databasus-launcher.exe check-install -data-dir <dir> -backups-dir <dir> -port <port>
+  databasus-launcher.exe check-install -data-dir <dir> -backups-dir <dir> -port <port> [-external-metadata-db]
                                             check the installer's choices; prints one line per problem
   databasus-launcher.exe tls-setup -data-dir <dir> -source self-signed|pfx|existing [-pfx <file>] [-check-only]
                                             store or check the HTTPS certificate for -https; the PFX
@@ -50,7 +51,7 @@ func run() int {
 		case "tls-setup":
 			return setUpTLS(os.Args[2:])
 		case "test-external-db":
-			return testExternalDb(os.Args[2:])
+			return verifyExternalDb(os.Args[2:])
 		case "save-external-db":
 			return saveExternalDb(os.Args[2:])
 		}
@@ -58,9 +59,7 @@ func run() int {
 
 	isService, err := winservice.IsRunningAsService()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "cannot tell whether this runs as a service: %v\n", err)
-
-		return 1
+		return failWith(os.Stderr, fmt.Errorf("cannot tell whether this runs as a service: %w", err))
 	}
 
 	if isService {
@@ -68,4 +67,12 @@ func run() int {
 	}
 
 	return runInConsole(os.Args[1:])
+}
+
+// failWith prints err on its own line, which the installer shows to the person running it, and
+// returns the exit code of a failed command.
+func failWith(output io.Writer, err error) int {
+	_, _ = fmt.Fprintln(output, err)
+
+	return 1
 }

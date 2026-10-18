@@ -11,14 +11,19 @@ import (
 	"databasus-backend/internal/util/tools"
 )
 
-// checkInstall is run by the installer before it installs anything. It prints one line per
-// problem, in words meant for the person running the installer, and exits 1 if there is any.
+// The installer runs this before it installs anything and shows each printed line, so problems are
+// worded for the person running Setup.
 func checkInstall(arguments []string) int {
 	flags := flag.NewFlagSet("databasus-launcher check-install", flag.ContinueOnError)
 
 	dataFolder := flags.String("data-dir", "", "program data folder the service will use")
 	backupsFolder := flags.String("backups-dir", "", "backups folder the service will use")
 	port := flags.Int("port", 0, "Web UI port; 0 skips the port check")
+	isExternalMetadataDb := flags.Bool(
+		"external-metadata-db",
+		false,
+		"the service will use an external metadata database, so the bundled cluster is not checked",
+	)
 
 	if err := flags.Parse(arguments); err != nil {
 		return 2
@@ -39,7 +44,7 @@ func checkInstall(arguments []string) int {
 		}
 	}
 
-	if *dataFolder != "" {
+	if *dataFolder != "" && !*isExternalMetadataDb {
 		bundledMajor := string(tools.GetMetadataPostgresqlVersion())
 		if err := installcheck.CheckMetadataClusterMajor(*dataFolder, bundledMajor); err != nil {
 			problems = append(problems, fmt.Sprintf("Program data folder: %v", err))

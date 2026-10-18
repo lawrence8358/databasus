@@ -31,23 +31,17 @@ func installService(arguments []string) int {
 
 	serviceArguments, err := buildServiceArguments(config)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-
-		return 1
+		return failWith(os.Stderr, err)
 	}
 
 	executablePath, err := os.Executable()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "cannot locate the launcher executable: %v\n", err)
-
-		return 1
+		return failWith(os.Stderr, fmt.Errorf("cannot locate the launcher executable: %w", err))
 	}
 
 	err = winservice.Install(winservice.InstallSpec{ExecutablePath: executablePath, Arguments: serviceArguments})
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-
-		return 1
+		return failWith(os.Stderr, err)
 	}
 
 	fmt.Printf("the %s service is installed; start it with: sc.exe start %s\n", winservice.Name, winservice.Name)
@@ -57,9 +51,7 @@ func installService(arguments []string) int {
 
 func uninstallService() int {
 	if err := winservice.Uninstall(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-
-		return 1
+		return failWith(os.Stderr, err)
 	}
 
 	fmt.Printf("the %s service is removed\n", winservice.Name)

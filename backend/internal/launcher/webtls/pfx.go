@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"software.sslmate.com/src/go-pkcs12"
+
+	"databasus-backend/internal/util/securefile"
 )
 
 // ParsePfx decodes a PFX (PKCS #12) file as Windows and OpenSSL export it, including the AES
@@ -40,14 +42,19 @@ func ParsePfx(pfxData []byte, password string, now time.Time) (certPEM, keyPEM [
 	return certPEM, keyPEM, summarize(leaf), nil
 }
 
-// ImportPfx replaces the stored certificate with the one in the PFX file.
-func ImportPfx(dataFolder string, pfxData []byte, password string, now time.Time) (Summary, error) {
+func ImportPfx(
+	dataFolder string,
+	pfxData []byte,
+	password string,
+	now time.Time,
+	readers securefile.Readers,
+) (Summary, error) {
 	certPEM, keyPEM, summary, err := ParsePfx(pfxData, password, now)
 	if err != nil {
 		return Summary{}, err
 	}
 
-	if err := store(dataFolder, certPEM, keyPEM); err != nil {
+	if err := store(dataFolder, certPEM, keyPEM, readers); err != nil {
 		return Summary{}, err
 	}
 

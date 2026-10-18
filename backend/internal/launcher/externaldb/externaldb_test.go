@@ -5,12 +5,14 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"databasus-backend/internal/util/securefile"
 )
 
 func Test_SaveThenLoad_ReturnsTrimmedConnectionString(t *testing.T) {
 	folder := t.TempDir()
 
-	require.NoError(t, Save(folder, "  host=db user=u password=secret dbname=d\r\n"))
+	require.NoError(t, Save(folder, "  host=db user=u password=secret dbname=d\r\n", securefile.CurrentAccount))
 
 	dsn, err := Load(GetFilePath(folder))
 	require.NoError(t, err)
@@ -18,7 +20,7 @@ func Test_SaveThenLoad_ReturnsTrimmedConnectionString(t *testing.T) {
 }
 
 func Test_Save_WithEmptyString_ReturnsError(t *testing.T) {
-	require.Error(t, Save(t.TempDir(), "  "))
+	require.Error(t, Save(t.TempDir(), "  ", securefile.CurrentAccount))
 }
 
 func Test_Load_WithBomAndEmptyContent_HandlesBoth(t *testing.T) {
@@ -35,17 +37,17 @@ func Test_Load_WithBomAndEmptyContent_HandlesBoth(t *testing.T) {
 	require.Error(t, err)
 }
 
-func Test_TestConnection_WithUnreachableServer_ErrorDoesNotLeakPassword(t *testing.T) {
+func Test_VerifyConnection_WithUnreachableServer_ErrorDoesNotLeakPassword(t *testing.T) {
 	dsn := "postgres://user:hunter2secret@127.0.0.1:1/db?sslmode=disable&connect_timeout=2"
 
-	err := TestConnection(t.Context(), dsn)
+	err := VerifyConnection(t.Context(), dsn)
 
 	require.Error(t, err)
 	require.NotContains(t, err.Error(), "hunter2secret")
 }
 
-func Test_TestConnection_WithMalformedString_ErrorDoesNotLeakPassword(t *testing.T) {
-	err := TestConnection(t.Context(), "postgres://user:hunter2secret@host:notaport/db")
+func Test_VerifyConnection_WithMalformedString_ErrorDoesNotLeakPassword(t *testing.T) {
+	err := VerifyConnection(t.Context(), "postgres://user:hunter2secret@host:notaport/db")
 
 	require.Error(t, err)
 	require.NotContains(t, err.Error(), "hunter2secret")

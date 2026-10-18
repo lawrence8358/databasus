@@ -8,14 +8,9 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// restrictToOwner replaces the DACL of path with a protected one (inheritance from the parent is
-// cut) that grants full control to the current account, SYSTEM and Administrators only.
-func restrictToOwner(path string, isDir bool) error {
-	user, err := currentUserSid()
-	if err != nil {
-		return err
-	}
-
+// restrict replaces the DACL of path with a protected one (inheritance from the parent is cut)
+// that grants full control to SYSTEM, Administrators and, for CurrentAccount, the current account.
+func restrict(path string, isDir bool, readers Readers) error {
 	system, err := windows.CreateWellKnownSid(windows.WinLocalSystemSid)
 	if err != nil {
 		return fmt.Errorf("failed to build SYSTEM SID: %w", err)
@@ -26,13 +21,24 @@ func restrictToOwner(path string, isDir bool) error {
 		return fmt.Errorf("failed to build Administrators SID: %w", err)
 	}
 
+	sids := []*windows.SID{system, admins}
+
+	if readers == CurrentAccount {
+		user, err := currentUserSid()
+		if err != nil {
+			return err
+		}
+
+		sids = append(sids, user)
+	}
+
 	inheritance := uint32(windows.NO_INHERITANCE)
 	if isDir {
 		inheritance = windows.SUB_CONTAINERS_AND_OBJECTS_INHERIT
 	}
 
 	var entries []windows.EXPLICIT_ACCESS
-	for _, sid := range []*windows.SID{user, system, admins} {
+	for _, sid := range sids {
 		entries = append(entries, windows.EXPLICIT_ACCESS{
 			AccessPermissions: windows.GENERIC_ALL,
 			AccessMode:        windows.GRANT_ACCESS,

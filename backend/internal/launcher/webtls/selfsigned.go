@@ -15,6 +15,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"databasus-backend/internal/util/securefile"
 )
 
 const (
@@ -28,8 +30,6 @@ type HostNames struct {
 	IPs      []net.IP
 }
 
-// DiscoverHostNames returns this computer's host name, its DNS name when DNS knows one, localhost
-// and the addresses of its network adapters, so the certificate matches whichever one is typed.
 func DiscoverHostNames() HostNames {
 	names := HostNames{
 		DNSNames: []string{"localhost"},
@@ -68,14 +68,18 @@ func lookupCanonicalName(hostname string) (string, error) {
 	return net.DefaultResolver.LookupCNAME(ctx, hostname)
 }
 
-// GenerateSelfSigned replaces the stored certificate with a new self-signed one for names.
-func GenerateSelfSigned(dataFolder string, names HostNames, now time.Time) (Summary, error) {
+func GenerateSelfSigned(
+	dataFolder string,
+	names HostNames,
+	now time.Time,
+	readers securefile.Readers,
+) (Summary, error) {
 	certPEM, keyPEM, summary, err := createSelfSigned(names, now)
 	if err != nil {
 		return Summary{}, err
 	}
 
-	if err := store(dataFolder, certPEM, keyPEM); err != nil {
+	if err := store(dataFolder, certPEM, keyPEM, readers); err != nil {
 		return Summary{}, err
 	}
 

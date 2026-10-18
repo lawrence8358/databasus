@@ -39,9 +39,7 @@ type Config struct {
 	Logger      *slog.Logger
 }
 
-// Run returns after both the metadata database and the backend have stopped: when ctx is
-// cancelled, a requested stop that returns nil, or when either process exits on its own, which
-// returns the reason.
+// A stop requested through ctx returns nil; either process exiting on its own returns the reason.
 func Run(ctx context.Context, config Config) error {
 	logger := config.Logger
 	if logger == nil {

@@ -7,11 +7,11 @@ import (
 )
 
 func Test_IsRestoreServerOlderThanDumpClient_ByVersions_ReturnsExpected(t *testing.T) {
-	tests := []struct {
-		name         string
-		clientMajor  int
-		serverTarget PostgresqlVersion
-		expected     bool
+	versionCases := []struct {
+		name          string
+		clientMajor   int
+		serverTarget  PostgresqlVersion
+		isServerOlder bool
 	}{
 		{"server older than client", 18, PostgresqlVersion12, true},
 		{"server one major older", 18, PostgresqlVersion17, true},
@@ -21,12 +21,12 @@ func Test_IsRestoreServerOlderThanDumpClient_ByVersions_ReturnsExpected(t *testi
 		{"server version unparseable", 18, PostgresqlVersion("abc"), false},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, versionCase := range versionCases {
+		t.Run(versionCase.name, func(t *testing.T) {
 			assert.Equal(
 				t,
-				tt.expected,
-				IsRestoreServerOlderThanDumpClient(tt.clientMajor, tt.serverTarget),
+				versionCase.isServerOlder,
+				IsRestoreServerOlderThanDumpClient(versionCase.clientMajor, versionCase.serverTarget),
 			)
 		})
 	}
