@@ -34,6 +34,8 @@ func parseRunFlags(arguments []string) (launcher.Config, error) {
 		`local folder for backups (default: <data-dir>\backups)`)
 	flags.IntVar(&config.MetadataDbPort, "metadata-db-port", metadatadb.DefaultPort,
 		"port of the bundled metadata PostgreSQL on 127.0.0.1")
+	flags.StringVar(&config.ExternalMetadataDsnFile, "external-metadata-db-file", "",
+		"file holding the connection string of an external metadata database; the bundled PostgreSQL is then not used")
 	flags.StringVar(&config.BackendExecutable, "backend", getDefaultBackendExecutable(),
 		"path to databasus.exe")
 	flags.StringVar(&config.WebListenHost, "listen-host", defaultWebListenHost,
@@ -80,6 +82,15 @@ func buildServiceArguments(config launcher.Config) ([]string, error) {
 		"-backend", backendExecutable,
 		"-listen-host", config.WebListenHost,
 		"-port", strconv.Itoa(config.WebPort),
+	}
+
+	if config.ExternalMetadataDsnFile != "" {
+		dsnFile, err := filepath.Abs(config.ExternalMetadataDsnFile)
+		if err != nil {
+			return nil, fmt.Errorf("external metadata database file: %w", err)
+		}
+
+		arguments = append(arguments, "-external-metadata-db-file", dsnFile)
 	}
 
 	if config.BackupsFolder != "" {
