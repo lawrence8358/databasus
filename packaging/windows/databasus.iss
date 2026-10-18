@@ -49,6 +49,13 @@ RestartApplications=no
 Source: "{#StageDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#StageDir}\databasus-launcher.exe"; DestDir: "{app}"; Flags: ignoreversion
 
+[InstallDelete]
+; An upgrade replaces these folders as a whole, so files the new version no longer ships (an old
+; migration, old Web UI chunks, binaries of the previous PostgreSQL minor) do not linger.
+Type: filesandordirs; Name: "{app}\migrations"
+Type: filesandordirs; Name: "{app}\ui\build"
+Type: filesandordirs; Name: "{app}\assets\tools\win-x64\postgresql"
+
 [Registry]
 ; Read back by the uninstaller and by later installers (upgrade keeps these choices).
 Root: HKLM; Subkey: "{#SettingsKey}"; Flags: uninsdeletekey
@@ -247,6 +254,85 @@ begin
   end;
 end;
 
+{ ---------- upgrade ---------- }
+
+{ Running Setup over an installed Databasus keeps the program data folder, the backups folder and
+  the port from the settings key the previous Setup wrote: the metadata database, secret key and
+  backups stay where the service expects them, and the new service start runs the migrations.
+  The hooks below use event attributes so they run beside the main event functions. }
+
+var
+  IsUpgradeChecked: Boolean;
+  IsUpgradeCached: Boolean;
+
+{ Decided once, before [Registry] writes the settings key for a fresh install too. }
+function IsUpgrade: Boolean;
+begin
+  if not IsUpgradeChecked then
+  begin
+    IsUpgradeCached := RegValueExists(HKLM, '{#SettingsKey}', 'DataDir');
+    IsUpgradeChecked := True;
+    if IsUpgradeCached then
+      Log('Upgrading Databasus ' + GetPreviousSetting('Version', '(unknown version)') + ' to {#AppVersion}');
+  end;
+  Result := IsUpgradeCached;
+end;
+
+{ Moving the folders during an upgrade would start the service on an empty data folder, so the
+  previous choices win over /DATADIR, /BACKUPSDIR and /PORT. }
+procedure KeepPreviousSettingsOnUpgrade;
+var
+  Previous: String;
+begin
+  if not IsUpgrade then
+    exit;
+
+  Previous := GetPreviousSetting('DataDir', FoldersPage.Values[0]);
+  if CompareText(RemoveBackslashUnlessRoot(Trim(FoldersPage.Values[0])), Previous) <> 0 then
+    Log('Upgrade: keeping the program data folder ' + Previous + ' instead of ' + FoldersPage.Values[0]);
+  FoldersPage.Values[0] := Previous;
+
+  Previous := GetPreviousSetting('BackupsDir', FoldersPage.Values[1]);
+  if CompareText(RemoveBackslashUnlessRoot(Trim(FoldersPage.Values[1])), Previous) <> 0 then
+    Log('Upgrade: keeping the backups folder ' + Previous + ' instead of ' + FoldersPage.Values[1]);
+  FoldersPage.Values[1] := Previous;
+
+  Previous := GetPreviousSetting('WebPort', PortPage.Values[0]);
+  if Trim(PortPage.Values[0]) <> Previous then
+    Log('Upgrade: keeping the Web UI port ' + Previous + ' instead of ' + PortPage.Values[0]);
+  PortPage.Values[0] := Previous;
+end;
+
+<event('ShouldSkipPage')>
+function UpgradeShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := IsUpgrade and ((PageID = FoldersPage.ID) or (PageID = PortPage.ID));
+end;
+
+<event('CurPageChanged')>
+procedure UpgradeCurPageChanged(CurPageID: Integer);
+begin
+  if (CurPageID = wpReady) and IsUpgrade then
+  begin
+    WizardForm.ReadyMemo.Lines.Add('');
+    WizardForm.ReadyMemo.Lines.Add('Upgrade from Databasus ' + GetPreviousSetting('Version', '(unknown version)') +
+      '. These stay as they are, with all their data:');
+    WizardForm.ReadyMemo.Lines.Add('      Program data folder: ' + GetDataDir(''));
+    WizardForm.ReadyMemo.Lines.Add('      Backups folder: ' + GetBackupsDir(''));
+    WizardForm.ReadyMemo.Lines.Add('      Web UI port: ' + GetPort(''));
+  end;
+end;
+
+{ Runs before the main PrepareToInstall stops the service, so a refused upgrade leaves the running
+  version and its data untouched. A silent install checks everything in the main implementation. }
+<event('PrepareToInstall')>
+function UpgradePrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  Result := '';
+  if IsUpgrade and not WizardSilent then
+    Result := CheckChoices(True, False);
+end;
+
 { ---------- wizard ---------- }
 
 procedure InitializeWizard;
@@ -270,6 +356,8 @@ begin
     'The Web UI listens on 127.0.0.1 only, so it is reachable from this computer and nowhere else.');
   PortPage.Add('Port:', False);
   PortPage.Values[0] := ExpandConstant('{param:PORT|' + GetPreviousSetting('WebPort', '{#DefaultPort}') + '}');
+
+  KeepPreviousSettingsOnUpgrade;
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
