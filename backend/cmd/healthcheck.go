@@ -44,10 +44,11 @@ func newHealthcheckClient(baseURL string) *http.Client {
 		return http.DefaultClient
 	}
 
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // liveness probe of the local server
-
-	return &http.Client{Transport: transport}
+	return &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // liveness probe of the local server
+		},
+	}
 }
 
 func runHealthcheckCommand() {

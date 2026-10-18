@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -350,7 +351,7 @@ func startServerWithGracefulShutdown(log *slog.Logger, app *gin.Engine) {
 	}
 
 	go func() {
-		if err := listenAndServe(srv); err != nil && err != http.ErrServerClosed {
+		if err := listenAndServe(srv); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Error("http server failed to listen", "error", err)
 		}
 	}()

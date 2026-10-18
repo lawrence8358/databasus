@@ -1,6 +1,7 @@
 package webtls
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -16,7 +17,10 @@ import (
 	"time"
 )
 
-const selfSignedValidity = 5 * 365 * 24 * time.Hour
+const (
+	selfSignedValidity = 5 * 365 * 24 * time.Hour
+	dnsLookupTimeout   = 5 * time.Second
+)
 
 // HostNames are the names and addresses colleagues may type to reach this computer.
 type HostNames struct {
@@ -35,7 +39,7 @@ func DiscoverHostNames() HostNames {
 	if hostname, err := os.Hostname(); err == nil && hostname != "" {
 		names.DNSNames = appendName(names.DNSNames, hostname)
 
-		if canonicalName, err := net.LookupCNAME(hostname); err == nil {
+		if canonicalName, err := lookupCanonicalName(hostname); err == nil {
 			names.DNSNames = appendName(names.DNSNames, strings.TrimSuffix(canonicalName, "."))
 		}
 	}
@@ -55,6 +59,13 @@ func DiscoverHostNames() HostNames {
 	}
 
 	return names
+}
+
+func lookupCanonicalName(hostname string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dnsLookupTimeout)
+	defer cancel()
+
+	return net.DefaultResolver.LookupCNAME(ctx, hostname)
 }
 
 // GenerateSelfSigned replaces the stored certificate with a new self-signed one for names.
