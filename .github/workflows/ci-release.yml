@@ -460,6 +460,109 @@ jobs:
         shell: pwsh
         run: ./e2e/windows-installer/run.ps1 -InstallerPath (Get-Item packaging/windows/out/databasus-setup-*.exe).FullName
 
+  # Installs the previous release's installer, creates data and a backup, then installs this
+  # commit's installer over it and checks the data, schedule and backup survive and the old backup
+  # restores (e2e/windows-installer/upgrade.ps1). The previous release is the newest v* tag that
+  # has the Windows installer; it is built from that tag here. Until such a tag exists the job only
+  # warns.
+  test-windows-installer-upgrade:
+    if: github.ref != 'refs/heads/develop'
+    runs-on: windows-latest
+    timeout-minutes: 60
+    needs: [test-windows-installer]
+    steps:
+      - name: Check out code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Find the previous release with a Windows installer
+        id: previous
+        shell: pwsh
+        run: |
+          $headCommit = git rev-parse HEAD
+          $tag = git tag --list 'v*' --sort=-v:refname | Where-Object {
+            (git rev-list -n 1 $_) -ne $headCommit -and
+              $(git cat-file -e "${_}:packaging/windows/databasus.iss" 2>$null; $LASTEXITCODE -eq 0)
+          } | Select-Object -First 1
+          if (-not $tag) {
+            Write-Host '::warning title=Windows upgrade test skipped::No earlier v* tag contains packaging/windows/databasus.iss, so there is no previous Windows release to upgrade from.'
+          } else {
+            Write-Host "previous release: $tag"
+            git worktree add previous $tag
+          }
+          "tag=$tag" | Out-File -Append -Encoding utf8 $env:GITHUB_OUTPUT
+          "version=$($tag -replace '^v', '')" | Out-File -Append -Encoding utf8 $env:GITHUB_OUTPUT
+
+      - name: Set up Go
+        if: steps.previous.outputs.tag != ''
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: previous/backend/go.mod
+          cache-dependency-path: previous/backend/go.sum
+
+      - name: Set up pnpm
+        if: steps.previous.outputs.tag != ''
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+        with:
+          package_json_file: previous/frontend/package.json
+
+      - name: Set up Node.js
+        if: steps.previous.outputs.tag != ''
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24.21.0"
+          cache: "pnpm"
+          cache-dependency-path: previous/frontend/pnpm-lock.yaml
+
+      - name: Build the previous release's Web UI
+        if: steps.previous.outputs.tag != ''
+        working-directory: previous/frontend
+        env:
+          VITE_APP_VERSION: ${{ steps.previous.outputs.version }}
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Generate the previous release's swagger docs
+        if: steps.previous.outputs.tag != ''
+        working-directory: previous/backend
+        run: |
+          go install github.com/swaggo/swag/cmd/swag@v1.16.4
+          swag init -d . -g cmd/main.go -o swagger
+
+      - name: Install Inno Setup 7.1.0
+        if: steps.previous.outputs.tag != ''
+        shell: pwsh
+        run: |
+          $installer = Join-Path $env:RUNNER_TEMP 'innosetup-7.1.0-x64.exe'
+          Invoke-WebRequest 'https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe' -OutFile $installer
+          $hash = (Get-FileHash $installer -Algorithm SHA256).Hash
+          if ($hash -ne '0362A383ED217D4C4239B5933866DD96D3EB2102737DA92F80F6057A4B40DF2F') { throw "unexpected Inno Setup checksum $hash" }
+          $innoFolder = Join-Path $env:RUNNER_TEMP 'innosetup'
+          Start-Process $installer -Wait -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/CURRENTUSER', '/PORTABLE=1', '/NOICONS', "/DIR=$innoFolder"
+          $innoFolder | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+
+      - name: Build the previous release's installer
+        if: steps.previous.outputs.tag != ''
+        shell: pwsh
+        run: ./previous/packaging/windows/build.ps1 -Version "${{ steps.previous.outputs.version }}"
+
+      - name: Download this commit's installer
+        if: steps.previous.outputs.tag != ''
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: databasus-windows-installer
+          path: current-installer
+
+      - name: Run the installer upgrade smoke test
+        if: steps.previous.outputs.tag != ''
+        shell: pwsh
+        run: >-
+          ./e2e/windows-installer/upgrade.ps1
+          -PreviousInstallerPath (Get-Item previous/packaging/windows/out/databasus-setup-*.exe).FullName
+          -InstallerPath (Get-Item current-installer/databasus-setup-*.exe).FullName
+
   test-filesystems:
     runs-on: ubuntu-latest
     timeout-minutes: 45
