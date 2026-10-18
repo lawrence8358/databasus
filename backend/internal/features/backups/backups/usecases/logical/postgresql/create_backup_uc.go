@@ -107,6 +107,8 @@ func (uc *CreatePostgresqlBackupUsecase) Execute(
 		backup.TimescaledbVersion = timescaledbVersion
 	}
 
+	backup.DumpClientMajorVersion = tools.GetPostgresqlClientMajorVersion(pg.Version)
+
 	return uc.streamToStorage(
 		ctx,
 		backup,

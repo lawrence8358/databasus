@@ -18,3 +18,11 @@ type RestoreOptions struct {
 	IsExcludeExtensions bool
 	IsSkipUserMappings  bool
 }
+
+// RestoreCompatibilityResponse tells the restore screen whether the chosen target server is older
+// than the client that produced the dump, so it can warn before the restore starts.
+type RestoreCompatibilityResponse struct {
+	IsTargetOlderThanDumpClient bool `json:"isTargetOlderThanDumpClient"`
+	DumpClientMajorVersion      int  `json:"dumpClientMajorVersion"`
+	TargetMajorVersion          int  `json:"targetMajorVersion"`
+}
