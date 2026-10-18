@@ -27,6 +27,7 @@ import (
 	"databasus-backend/internal/util/encryption"
 	io_utils "databasus-backend/internal/util/io"
 	"databasus-backend/internal/util/namelist"
+	"databasus-backend/internal/util/securefile"
 	"databasus-backend/internal/util/tools"
 )
 
@@ -334,7 +335,7 @@ func (uc *CreateMysqlBackupUsecase) createTempMyCnfFile(
 		return "", fmt.Errorf("failed to create temp directory: %w", err)
 	}
 
-	if err := os.Chmod(tempDir, 0o700); err != nil {
+	if err := securefile.RestrictDir(tempDir, 0o700); err != nil {
 		_ = os.RemoveAll(tempDir)
 		return "", fmt.Errorf("failed to set temp directory permissions: %w", err)
 	}
@@ -354,7 +355,7 @@ port=%d
 		content += "ssl-mode=DISABLED\n"
 	}
 
-	err = os.WriteFile(myCnfFile, []byte(content), 0o600)
+	err = securefile.WriteFile(myCnfFile, []byte(content), 0o600)
 	if err != nil {
 		_ = os.RemoveAll(tempDir)
 		return "", fmt.Errorf("failed to write .my.cnf: %w", err)

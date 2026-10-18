@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"databasus-backend/internal/util/encryption"
+	"databasus-backend/internal/util/securefile"
 	"databasus-backend/internal/util/tools"
 )
 
@@ -46,7 +47,7 @@ func WriteCredentialFilesToTempDir(
 		return nil, fmt.Errorf("failed to create temporary directory: %w", err)
 	}
 
-	if err := os.Chmod(dir, 0o700); err != nil {
+	if err := securefile.RestrictDir(dir, 0o700); err != nil {
 		_ = os.RemoveAll(dir)
 
 		return nil, fmt.Errorf("failed to set temporary directory permissions: %w", err)
@@ -237,7 +238,7 @@ func (f *CredentialTempFiles) writePgpass(spec CredentialSpec, password string) 
 	)
 
 	path := filepath.Join(f.Dir, ".pgpass")
-	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+	if err := securefile.WriteFile(path, []byte(content), 0o600); err != nil {
 		return fmt.Errorf("failed to write .pgpass file: %w", err)
 	}
 
@@ -278,7 +279,7 @@ func (f *CredentialTempFiles) writeCert(
 	}
 
 	path := filepath.Join(f.Dir, fileName)
-	if err := os.WriteFile(path, []byte(pem), 0o600); err != nil {
+	if err := securefile.WriteFile(path, []byte(pem), 0o600); err != nil {
 		return "", err
 	}
 
