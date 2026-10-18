@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"databasus-backend/internal/launcher/installcheck"
+	"databasus-backend/internal/util/tools"
 )
 
 // checkInstall is run by the installer before it installs anything. It prints one line per
@@ -35,6 +36,13 @@ func checkInstall(arguments []string) int {
 
 		if err := installcheck.CheckServiceCanWriteFolder(folder.path); err != nil {
 			problems = append(problems, fmt.Sprintf("%s: %v", folder.name, err))
+		}
+	}
+
+	if *dataFolder != "" {
+		bundledMajor := string(tools.GetMetadataPostgresqlVersion())
+		if err := installcheck.CheckMetadataClusterMajor(*dataFolder, bundledMajor); err != nil {
+			problems = append(problems, fmt.Sprintf("Program data folder: %v", err))
 		}
 	}
 
