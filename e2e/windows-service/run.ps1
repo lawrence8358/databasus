@@ -124,7 +124,8 @@ try {
     Invoke-Launcher @('install', '-data-dir', $DataDir, '-backend', (Join-Path $installFolder 'missing\databasus.exe'))
     Start-Service $serviceName
     Wait-Until {
-        ((Get-ServiceEvents | Where-Object LevelDisplayName -eq 'Error').Message -join "`n") -match 'backend executable'
+        # Level 2 is Error; LevelDisplayName is localized (e.g. on a Chinese Windows).
+        ((Get-ServiceEvents | Where-Object Level -eq 2).Message -join "`n") -match 'backend executable'
     } 60 'the start failure in the event log'
 
     Write-Host '== uninstall'

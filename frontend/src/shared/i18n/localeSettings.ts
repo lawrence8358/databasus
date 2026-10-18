@@ -5,12 +5,12 @@ import esES from 'antd/locale/es_ES';
 import frFR from 'antd/locale/fr_FR';
 import ptBR from 'antd/locale/pt_BR';
 import ruRU from 'antd/locale/ru_RU';
-import zhCN from 'antd/locale/zh_CN';
+import zhTW from 'antd/locale/zh_TW';
 import 'dayjs/locale/es';
 import 'dayjs/locale/fr';
 import 'dayjs/locale/pt-br';
 import 'dayjs/locale/ru';
-import 'dayjs/locale/zh-cn';
+import 'dayjs/locale/zh-tw';
 
 import type { Locale } from './dictionaries';
 
@@ -27,7 +27,7 @@ export const LOCALE_SETTINGS: Record<Locale, LocaleSettings> = {
   es: { languageTag: 'es', dayjsLocale: 'es', antdLocale: esES },
   // Brazilian Portuguese is the one Portuguese variant shipped
   pt: { languageTag: 'pt-BR', dayjsLocale: 'pt-br', antdLocale: ptBR },
-  // Simplified Chinese is the one Chinese variant shipped
-  zh: { languageTag: 'zh-CN', dayjsLocale: 'zh-cn', antdLocale: zhCN },
+  // Traditional Chinese (Taiwan) is the one Chinese variant shipped
+  zh: { languageTag: 'zh-TW', dayjsLocale: 'zh-tw', antdLocale: zhTW },
   fr: { languageTag: 'fr', dayjsLocale: 'fr', antdLocale: frFR },
 };

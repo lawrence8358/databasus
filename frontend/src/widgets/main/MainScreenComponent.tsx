@@ -24,7 +24,13 @@ import {
   WorkspaceSettingsComponent,
 } from '../../features/workspaces';
 import { useIsMobile, useIsNewGitHubVersionAvailable, useScreenHeight } from '../../shared/hooks';
-import { getWebsitePageUrl, translateApiError, useLocale } from '../../shared/i18n';
+import {
+  getGitHubRepository,
+  getGitHubRepositoryUrl,
+  getWebsitePageUrl,
+  translateApiError,
+  useLocale,
+} from '../../shared/i18n';
 import { LanguageThemeControlComponent, SponsorshipLinkComponent } from '../../shared/ui';
 import { StarButtonComponent } from '../../shared/ui/StarButtonComponent';
 import { getDiskUsageValues } from './getDiskUsageValues';
@@ -37,7 +43,7 @@ export const MainScreenComponent = () => {
   const { message } = App.useApp();
   const screenHeight = useScreenHeight();
   const isMobile = useIsMobile();
-  const isNewGitHubVersionAvailable = useIsNewGitHubVersionAvailable();
+  const isNewGitHubVersionAvailable = useIsNewGitHubVersionAvailable(getGitHubRepository(locale));
   const contentHeight = screenHeight - (isMobile ? 70 : 95);
 
   const [selectedTab, setSelectedTab] = useState<MainTab>('databases');
@@ -375,7 +381,7 @@ export const MainScreenComponent = () => {
               {isNewGitHubVersionAvailable && (
                 <Tooltip title={t('app.navigation.newVersionAvailable')}>
                   <a
-                    href="https://github.com/databasus/databasus/releases/latest"
+                    href={`${getGitHubRepositoryUrl(locale)}/releases/latest`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex"

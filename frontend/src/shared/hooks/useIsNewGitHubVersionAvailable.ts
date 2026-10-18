@@ -3,9 +3,8 @@ import { useEffect, useState } from 'react';
 import { APP_VERSION } from '../../constants';
 import { compareVersions, parseGitHubTag } from '../lib';
 
-const GITHUB_RELEASES_API = 'https://api.github.com/repos/databasus/databasus/releases/latest';
 // eslint-disable-next-line i18next/no-literal-string -- localStorage key
-const CACHE_KEY = 'githubLatestVersion';
+const CACHE_KEY_PREFIX = 'githubLatestVersion';
 const CACHE_TTL_MS = 15 * 60 * 1000;
 
 interface CachedVersion {
@@ -13,9 +12,9 @@ interface CachedVersion {
   fetchedAt: number;
 }
 
-function readCachedVersion(): string | null {
+function readCachedVersion(cacheKey: string): string | null {
   try {
-    const raw = localStorage.getItem(CACHE_KEY);
+    const raw = localStorage.getItem(cacheKey);
     if (!raw) {
       return null;
     }
@@ -32,9 +31,9 @@ function readCachedVersion(): string | null {
   }
 }
 
-async function fetchLatestVersion(): Promise<string | null> {
+async function fetchLatestVersion(repository: string, cacheKey: string): Promise<string | null> {
   try {
-    const response = await fetch(GITHUB_RELEASES_API, {
+    const response = await fetch(`https://api.github.com/repos/${repository}/releases/latest`, {
       headers: { Accept: 'application/vnd.github+json' },
     });
 
@@ -50,7 +49,7 @@ async function fetchLatestVersion(): Promise<string | null> {
     const version = parseGitHubTag(release.tag_name);
 
     localStorage.setItem(
-      CACHE_KEY,
+      cacheKey,
       JSON.stringify({ version, fetchedAt: Date.now() } satisfies CachedVersion),
     );
 
@@ -60,7 +59,8 @@ async function fetchLatestVersion(): Promise<string | null> {
   }
 }
 
-export function useIsNewGitHubVersionAvailable(): boolean {
+// Checks the releases of the repository the interface links to (see getGitHubRepository).
+export function useIsNewGitHubVersionAvailable(repository: string): boolean {
   const [latestVersion, setLatestVersion] = useState<string | null>(null);
 
   useEffect(() => {
@@ -68,7 +68,8 @@ export function useIsNewGitHubVersionAvailable(): boolean {
       return;
     }
 
-    const cachedVersion = readCachedVersion();
+    const cacheKey = `${CACHE_KEY_PREFIX}:${repository}`;
+    const cachedVersion = readCachedVersion(cacheKey);
     if (cachedVersion) {
       setLatestVersion(cachedVersion);
       return;
@@ -76,7 +77,7 @@ export function useIsNewGitHubVersionAvailable(): boolean {
 
     let isActive = true;
 
-    fetchLatestVersion().then((version) => {
+    fetchLatestVersion(repository, cacheKey).then((version) => {
       if (isActive && version) {
         setLatestVersion(version);
       }
@@ -85,7 +86,7 @@ export function useIsNewGitHubVersionAvailable(): boolean {
     return () => {
       isActive = false;
     };
-  }, []);
+  }, [repository]);
 
   return latestVersion !== null && compareVersions(latestVersion, APP_VERSION) > 0;
 }
