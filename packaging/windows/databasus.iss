@@ -19,6 +19,9 @@
 ;                   /SELFSIGNED; with neither, an earlier valid certificate is kept or a self-signed one
 ;                   is generated. /LOCALONLY switches back to 127.0.0.1. An upgrade keeps the earlier
 ;                   choice and certificate unless one of them is given.
+; Upgrade:          run a newer setup over the installed one; it keeps the earlier data folder,
+;                   backups folder and port (/DATADIR, /BACKUPSDIR and /PORT are ignored) and refuses,
+;                   before stopping the service, a metadata database of another PostgreSQL major.
 ; Silent uninstall: "<install dir>\unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES [/DELETEDATA]
 
 #ifndef AppVersion
@@ -61,6 +64,13 @@ RestartApplications=no
 [Files]
 Source: "{#StageDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#StageDir}\databasus-launcher.exe"; DestDir: "{app}"; Flags: ignoreversion
+
+[InstallDelete]
+; An upgrade replaces these folders as a whole, so files the new version no longer ships (an old
+; migration, old Web UI chunks, binaries of the previous PostgreSQL minor) do not linger.
+Type: filesandordirs; Name: "{app}\migrations"
+Type: filesandordirs; Name: "{app}\ui\build"
+Type: filesandordirs; Name: "{app}\assets\tools\win-x64\postgresql"
 
 [Registry]
 ; Read back by the uninstaller and by later installers (upgrade keeps these choices).
@@ -548,9 +558,9 @@ begin
     PfxFileEdit.Text := FileName;
 end;
 
-{ Silent mode has no page to activate: /PFX imports a file, /SELFSIGNED generates a new
+{ Silent mode and an upgrade show no page: /PFX imports a file, /SELFSIGNED generates a new
   certificate, and otherwise a usable stored certificate is kept. }
-procedure ChooseSilentCertificateSource;
+procedure ChooseCertificateSourceWithoutPage;
 var
   PasswordFile: String;
   Lines: TArrayOfString;
@@ -577,6 +587,18 @@ begin
   else if IsLanSwitchGiven('/SELFSIGNED') then
     CertSelfSignedRadio.Checked := True;
   SelectDefaultCertificateSource;
+  if CertSelfSignedRadio.Checked and not IsLanSwitchGiven('/SELFSIGNED') then
+    Log('No usable HTTPS certificate is stored; a self-signed one will be generated');
+end;
+
+function GetCertificateSourceDescription: String;
+begin
+  if CertPfxRadio.Checked then
+    Result := 'certificate imported from ' + Trim(PfxFileEdit.Text)
+  else if CertSelfSignedRadio.Checked then
+    Result := 'new self-signed certificate'
+  else
+    Result := 'current certificate kept';
 end;
 
 { Returns the problem in words for the person running Setup, or '' when LAN access is off or the
@@ -776,6 +798,129 @@ begin
   end;
 end;
 
+{ ---------- upgrade ---------- }
+
+{ Running Setup over an installed Databasus keeps the program data folder, the backups folder, the
+  port and the metadata database choice from the settings key the previous Setup wrote: the
+  metadata database, secret key and backups stay where the service expects them, and the new
+  service start runs the migrations. The external database choice is kept by its own page's
+  defaults (/EXTERNALDBFILE and /BUNDLEDDB still change it); the page is only skipped here.
+  The hooks below use event attributes so they run beside the main event functions. }
+
+var
+  IsUpgradeChecked: Boolean;
+  IsUpgradeCached: Boolean;
+
+{ Decided once, before [Registry] writes the settings key for a fresh install too. }
+function IsUpgrade: Boolean;
+begin
+  if not IsUpgradeChecked then
+  begin
+    IsUpgradeCached := RegValueExists(HKLM, '{#SettingsKey}', 'DataDir');
+    IsUpgradeChecked := True;
+    if IsUpgradeCached then
+      Log('Upgrading Databasus ' + GetPreviousSetting('Version', '(unknown version)') + ' to {#AppVersion}');
+  end;
+  Result := IsUpgradeCached;
+end;
+
+{ Moving the folders during an upgrade would start the service on an empty data folder, so the
+  previous choices win over /DATADIR, /BACKUPSDIR and /PORT. }
+procedure KeepPreviousSettingsOnUpgrade;
+var
+  Previous: String;
+begin
+  if not IsUpgrade then
+    exit;
+
+  Previous := GetPreviousSetting('DataDir', FoldersPage.Values[0]);
+  if CompareText(RemoveBackslashUnlessRoot(Trim(FoldersPage.Values[0])), Previous) <> 0 then
+    Log('Upgrade: keeping the program data folder ' + Previous + ' instead of ' + FoldersPage.Values[0]);
+  FoldersPage.Values[0] := Previous;
+
+  Previous := GetPreviousSetting('BackupsDir', FoldersPage.Values[1]);
+  if CompareText(RemoveBackslashUnlessRoot(Trim(FoldersPage.Values[1])), Previous) <> 0 then
+    Log('Upgrade: keeping the backups folder ' + Previous + ' instead of ' + FoldersPage.Values[1]);
+  FoldersPage.Values[1] := Previous;
+
+  Previous := GetPreviousSetting('WebPort', PortPage.Values[0]);
+  if Trim(PortPage.Values[0]) <> Previous then
+    Log('Upgrade: keeping the Web UI port ' + Previous + ' instead of ' + PortPage.Values[0]);
+  PortPage.Values[0] := Previous;
+end;
+
+<event('ShouldSkipPage')>
+function UpgradeShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := IsUpgrade and
+    ((PageID = FoldersPage.ID) or (PageID = PortPage.ID) or (PageID = ExternalDbPage.ID));
+end;
+
+<event('CurPageChanged')>
+procedure UpgradeCurPageChanged(CurPageID: Integer);
+begin
+  if (CurPageID = wpReady) and IsUpgrade then
+  begin
+    WizardForm.ReadyMemo.Lines.Add('');
+    WizardForm.ReadyMemo.Lines.Add('Upgrade from Databasus ' + GetPreviousSetting('Version', '(unknown version)') +
+      '. These stay as they are, with all their data:');
+    WizardForm.ReadyMemo.Lines.Add('      Program data folder: ' + GetDataDir(''));
+    WizardForm.ReadyMemo.Lines.Add('      Backups folder: ' + GetBackupsDir(''));
+    WizardForm.ReadyMemo.Lines.Add('      Web UI port: ' + GetPort(''));
+    if IsExternalDbChosen then
+      WizardForm.ReadyMemo.Lines.Add('      Metadata database: external PostgreSQL (stored connection string)')
+    else
+      WizardForm.ReadyMemo.Lines.Add('      Metadata database: bundled PostgreSQL');
+  end;
+end;
+
+{ Runs before the main PrepareToInstall stops the service, so a refused upgrade leaves the running
+  version and its data untouched. The skipped pages' checks run here; a silent install checks
+  everything in the main implementation. }
+<event('PrepareToInstall')>
+function UpgradePrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  Result := '';
+  if IsUpgrade and not WizardSilent then
+  begin
+    Result := CheckChoices(True, False);
+    if Result = '' then
+      Result := CheckExternalDb;
+  end;
+end;
+
+{ ---------- LAN access on upgrade ---------- }
+
+{ An upgrade keeps the network access choice and the stored certificate like the other choices:
+  the page is skipped, and only a silent /LANACCESS, /LOCALONLY, /PFX or /SELFSIGNED changes them.
+  A silent install checks them in the main PrepareToInstall. }
+<event('ShouldSkipPage')>
+function LanAccessShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := IsUpgrade and (PageID = LanAccessPage.ID);
+end;
+
+<event('CurPageChanged')>
+procedure LanAccessCurPageChanged(CurPageID: Integer);
+begin
+  if (CurPageID <> wpReady) or not IsUpgrade then
+    exit;
+  ChooseCertificateSourceWithoutPage;
+  if IsLanAccessChosen then
+    WizardForm.ReadyMemo.Lines.Add('      Web UI access: local network, HTTPS only (' +
+      GetCertificateSourceDescription + ')')
+  else
+    WizardForm.ReadyMemo.Lines.Add('      Web UI access: this computer only (127.0.0.1)');
+end;
+
+<event('PrepareToInstall')>
+function LanAccessPrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  Result := '';
+  if IsUpgrade and not WizardSilent then
+    Result := CheckLanAccess;
+end;
+
 { ---------- wizard ---------- }
 
 procedure InitializeWizard;
@@ -803,6 +948,8 @@ begin
 
   CreateExternalDbPage(PortPage.ID);
   CreateLanAccessPage(PortPage.ID);
+
+  KeepPreviousSettingsOnUpgrade;
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
@@ -862,7 +1009,7 @@ begin
       Result := CheckExternalDb;
     if Result = '' then
     begin
-      ChooseSilentCertificateSource;
+      ChooseCertificateSourceWithoutPage;
       Result := CheckLanAccess;
     end;
     if Result <> '' then

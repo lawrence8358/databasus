@@ -64,6 +64,27 @@ Exit codes: `0` installed and the Web UI answers; `1` unsupported system or inva
 not register or start. The reason is in the `/LOG` file, and for `10` also in
 `<data dir>\logs\launcher.log` and the Application event log (source `Databasus`).
 
+## Upgrading
+
+Run the new version's `.exe` over the installed one, interactively or with the same silent command
+line minus the folder options. Setup reads the earlier choices from `HKLM\SOFTWARE\Databasus` and
+keeps them without asking again: the program data folder, the backups folder, the Web UI port and
+the metadata database choice (only `/EXTERNALDBFILE` or `/BUNDLEDDB` change the last one;
+`/DATADIR`, `/BACKUPSDIR` and `/PORT` are ignored on an upgrade, because moving the folders would
+start the service on an empty metadata database). The Ready page lists what is kept.
+
+Before it touches anything, Setup checks the existing metadata database: if it was created by
+another PostgreSQL major version than the one the new version bundles, Setup stops with the reason
+(exit code `7` when silent) and leaves the running service and its data as they are. Moving to a
+new major needs `pg_upgrade`, which Setup does not do. Within one major (for example 18.4 to 18.6)
+the new binaries simply run the existing data.
+
+Otherwise Setup stops the service, replaces the program files (the `migrations`, `ui\build` and
+bundled PostgreSQL folders as a whole, so nothing of the old version lingers), updates the service
+registration and starts it again. The backend applies the new metadata migrations at that start,
+and Setup waits until the Web UI answers. Users, databases, schedules, settings, the secret key and
+all backups stay.
+
 ## Uninstalling
 
 From Apps & features, or `"<install dir>\unins000.exe"`. The program data folder and the backups
@@ -94,3 +115,21 @@ disk instead), runs a throwaway PostgreSQL server from the installed bundle on p
 (`-SourcePostgresPort`), and uses port 4123 for the Web UI (`-Port`). Afterwards the program data
 folder (`C:\ProgramData\Databasus` unless `-DataDir` is given) is left behind on purpose; delete it
 before the next run.
+
+`e2e/windows-installer/upgrade.ps1` covers an upgrade: it installs the previous release, creates a
+user, a workspace, a local storage, a database, a backup and a weekly schedule, checks that the
+current installer refuses a metadata database of another PostgreSQL major without stopping the
+service, installs the current version with no folder or port options, and then checks the version
+changed, the service kept its folders and port, the metadata database is at the newest shipped
+migration, everything created before is still there, the old backup restores with the same rows,
+and a new backup works. CI runs it in the `test-windows-installer-upgrade` job, which builds the
+previous installer from the newest `v*` tag that contains `packaging/windows/databasus.iss` (and
+only warns while there is none). By hand, with the same machine requirements:
+
+```powershell
+pwsh -File e2e/windows-installer/upgrade.ps1 `
+    -PreviousInstallerPath databasus-setup-1.2.2-x64.exe -InstallerPath databasus-setup-1.2.3-x64.exe
+```
+
+It uses port 4124 for the Web UI and 5498 for the throwaway source server, keeps backups in
+`<data dir>\backups`, and leaves the program data folder behind like `run.ps1`.
