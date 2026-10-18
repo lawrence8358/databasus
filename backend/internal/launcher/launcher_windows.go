@@ -90,7 +90,11 @@ func Run(ctx context.Context, config Config) error {
 		return errors.Join(backend.stop(), metadataDatabase.Stop())
 	case <-backend.exited:
 		return errors.Join(
-			fmt.Errorf("the backend exited: %w", backend.exitErr),
+			fmt.Errorf(
+				"the backend exited: %w; its last output:\n%s",
+				backend.exitErr,
+				backend.outputTail.GetContents(),
+			),
 			metadataDatabase.Stop(),
 		)
 	case databaseErr := <-metadataDatabase.GetUnexpectedExitChannel():

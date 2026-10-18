@@ -21,11 +21,14 @@ import (
 const (
 	databaseDsnEnvVariable = "DATABASE_DSN"
 	envModeEnvVariable     = "ENV_MODE"
+
+	backendOutputTailBytes = 2048
 )
 
 type backendProcess struct {
 	command     *exec.Cmd
 	stopEvent   *stopevent.Event
+	outputTail  *outputTail
 	exited      chan struct{}
 	exitErr     error
 	logger      *slog.Logger
@@ -51,8 +54,11 @@ func startBackend(ctx context.Context, spec backendStartSpec) (*backendProcess, 
 	command := exec.CommandContext(context.WithoutCancel(ctx), spec.executablePath)
 	command.Dir = filepath.Dir(spec.executablePath)
 	command.Env = append(buildBackendEnvironment(spec), stopEvent.GetEnvironmentEntry())
-	command.Stdout = spec.output
-	command.Stderr = spec.output
+	outputTail := newOutputTail(backendOutputTailBytes)
+	output := io.MultiWriter(spec.output, outputTail)
+
+	command.Stdout = output
+	command.Stderr = output
 	command.SysProcAttr = &syscall.SysProcAttr{
 		CreationFlags:              getBackendCreationFlags(),
 		AdditionalInheritedHandles: []syscall.Handle{stopEvent.GetHandle()},
@@ -67,6 +73,7 @@ func startBackend(ctx context.Context, spec backendStartSpec) (*backendProcess, 
 	backend := &backendProcess{
 		command:     command,
 		stopEvent:   stopEvent,
+		outputTail:  outputTail,
 		exited:      make(chan struct{}),
 		logger:      spec.logger,
 		stopTimeout: spec.stopTimeout,

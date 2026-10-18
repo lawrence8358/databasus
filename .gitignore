@@ -21,6 +21,8 @@ node_modules/
 .claude/skills/*
 !.claude/skills/humanizer/
 backend/cleanup_test_db.exe
+backend/databasus.exe
+backend/databasus-launcher.exe
 plans/
 
 .pnpm-store
