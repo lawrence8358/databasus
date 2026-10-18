@@ -282,7 +282,7 @@ The Web UI hides the engines and backup modes that are not available.
 4. Optionally, under advanced options, point Databasus at an external PostgreSQL database for metadata instead of the bundled one
 5. When the installer finishes, Databasus runs as an auto-start Windows Service that restarts after a crash, and your browser opens the Web UI. Start, stop or restart it from the Windows Services console
 
-The installer also has a silent mode where every option is passed on the command line, for scripted installs.
+The installer also has a silent mode where every option is passed on the command line, for scripted installs. The parameters are listed in [packaging/windows/README.md](packaging/windows/README.md).
 
 **Upgrading:** run the newer installer over the existing install. Settings, databases, schedules and backups are kept, metadata migrations run on their own, and the bundled PostgreSQL gets its minor updates with no data conversion.
 

@@ -65,7 +65,10 @@ kept in `<data-dir>\metadata-db.password`. The server listens on `127.0.0.1:5437
 and the folders to `databasus.exe`, and on Ctrl+C stops the backend first and the database second.
 If the database server was killed, the next start lets PostgreSQL recover it; if it cannot start at
 all, the launcher resets its WAL once, as the Docker image does. `-backups-dir` defaults to
-`<data-dir>\backups`; the other backend settings, such as `SMTP_HOST`, are read from the
+`<data-dir>\backups`. The Web UI and API listen on `127.0.0.1:4005`; change that with
+`-listen-host` (`""` for every interface) and `-port`, which reach the backend as
+`DATABASUS_LISTEN_HOST` and `DATABASUS_PORT` (unset, the backend listens on every interface at
+4005, as in Docker). The other backend settings, such as `SMTP_HOST`, are read from the
 environment as usual.
 
 To run Databasus as a Windows service instead, register it from an administrator prompt with the
@@ -82,6 +85,9 @@ launcher's own log and the console output of the backend and the database server
 `<data-dir>\logs\launcher.log`; start and stop, and the reason the service stopped on its own,
 also go to the Application event log under the `Databasus` source.
 `databasus-launcher.exe uninstall` stops and removes the service and leaves the data folder alone.
+
+The offline installer in `packaging/windows` does all of this for you; see
+[packaging/windows/README.md](../packaging/windows/README.md).
 
 To run the backend alone against a PostgreSQL you manage yourself, skip the launcher:
 

@@ -27,3 +27,5 @@ plans/
 
 .pnpm-store
 __pycache__/
+
+packaging/windows/out/

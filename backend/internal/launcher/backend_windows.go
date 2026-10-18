@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -19,8 +20,11 @@ import (
 )
 
 const (
-	databaseDsnEnvVariable = "DATABASE_DSN"
-	envModeEnvVariable     = "ENV_MODE"
+	databaseDsnEnvVariable   = "DATABASE_DSN"
+	envModeEnvVariable       = "ENV_MODE"
+	webListenHostEnvVariable = "DATABASUS_LISTEN_HOST"
+	webPortEnvVariable       = "DATABASUS_PORT"
+	appVersionEnvVariable    = "APP_VERSION"
 
 	backendOutputTailBytes = 2048
 )
@@ -40,6 +44,9 @@ type backendStartSpec struct {
 	metadataDsn    string
 	dataFolder     string
 	backupsFolder  string
+	webListenHost  string
+	webPort        int
+	appVersion     string
 	output         io.Writer
 	stopTimeout    time.Duration
 	logger         *slog.Logger
@@ -106,9 +113,15 @@ func buildBackendEnvironment(spec backendStartSpec) []string {
 		environment = append(environment, envModeEnvVariable+"=production")
 	}
 
+	if _, isSet := os.LookupEnv(appVersionEnvVariable); !isSet && spec.appVersion != "" {
+		environment = append(environment, appVersionEnvVariable+"="+spec.appVersion)
+	}
+
 	environment = append(environment,
 		databaseDsnEnvVariable+"="+spec.metadataDsn,
 		locations.DataFolderEnvVariable+"="+spec.dataFolder,
+		webListenHostEnvVariable+"="+spec.webListenHost,
+		webPortEnvVariable+"="+strconv.Itoa(spec.webPort),
 	)
 
 	if spec.backupsFolder != "" {

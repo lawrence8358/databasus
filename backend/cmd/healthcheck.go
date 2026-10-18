@@ -36,7 +36,11 @@ func checkServerAlive(baseURL string) error {
 }
 
 func runHealthcheckCommand() {
-	err := checkServerAlive("http://localhost" + serverAddr)
+	address, err := getServerAddress()
+	if err == nil {
+		err = checkServerAlive(address.getLocalBaseURL())
+	}
+
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "healthcheck failed: %v\n", err)
 		os.Exit(1)

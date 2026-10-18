@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"databasus-backend/internal/launcher/metadatadb"
@@ -21,6 +23,12 @@ type Config struct {
 	BackupsFolder     string
 	MetadataDbPort    int
 	BackendExecutable string
+	// WebListenHost and WebPort are where the backend serves the Web UI and API; an empty host
+	// means every interface.
+	WebListenHost string
+	WebPort       int
+	// AppVersion is what the backend reports as its version, as APP_VERSION does in the Docker image.
+	AppVersion string
 	// ChildOutput receives the backend's and the metadata server's console output; os.Stderr when nil.
 	ChildOutput io.Writer
 	Logger      *slog.Logger
@@ -48,6 +56,10 @@ func Run(ctx context.Context, config Config) error {
 		return fmt.Errorf("backend executable: %w", err)
 	}
 
+	if err := ensureWebPortIsFree(ctx, config.WebListenHost, config.WebPort); err != nil {
+		return err
+	}
+
 	if err := writeFrontendRuntimeConfigIfUiPresent(config.BackendExecutable, logger); err != nil {
 		return err
 	}
@@ -73,6 +85,9 @@ func Run(ctx context.Context, config Config) error {
 		metadataDsn:    metadataDatabase.GetDsn(),
 		dataFolder:     config.DataFolder,
 		backupsFolder:  config.BackupsFolder,
+		webListenHost:  config.WebListenHost,
+		webPort:        config.WebPort,
+		appVersion:     config.AppVersion,
 		output:         childOutput,
 		stopTimeout:    defaultBackendStopTimeout,
 		logger:         logger,
@@ -100,6 +115,17 @@ func Run(ctx context.Context, config Config) error {
 	case databaseErr := <-metadataDatabase.GetUnexpectedExitChannel():
 		return errors.Join(databaseErr, backend.stop())
 	}
+}
+
+// The backend only logs a failed listen and keeps running without its Web UI, so the launcher
+// refuses to start instead, which surfaces the conflict in the service log and event log.
+func ensureWebPortIsFree(ctx context.Context, host string, port int) error {
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", net.JoinHostPort(host, strconv.Itoa(port)))
+	if err != nil {
+		return fmt.Errorf("the Web UI port %d is not available: %w", port, err)
+	}
+
+	return listener.Close()
 }
 
 func writeFrontendRuntimeConfigIfUiPresent(backendExecutable string, logger *slog.Logger) error {

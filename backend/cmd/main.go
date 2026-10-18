@@ -68,8 +68,6 @@ import (
 // @BasePath /api/v1
 // @schemes http
 
-const serverAddr = ":4005"
-
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
 		runHealthcheckCommand() // exits the process
@@ -328,12 +326,18 @@ func resetPassword(ctx context.Context, email, newPassword string, log *slog.Log
 }
 
 func startServerWithGracefulShutdown(log *slog.Logger, app *gin.Engine) {
+	address, err := getServerAddress()
+	if err != nil {
+		log.Error("invalid http server address", "error", err)
+		logger.ExitAfterFlush(1)
+	}
+
 	srv := &http.Server{
-		Addr:    serverAddr,
+		Addr:    address.getListenAddress(),
 		Handler: app,
 	}
 
-	log.Info(fmt.Sprintf("http server listening on %s", serverAddr))
+	log.Info(fmt.Sprintf("http server listening on %s", srv.Addr))
 
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
