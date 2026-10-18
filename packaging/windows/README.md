@@ -62,7 +62,7 @@ initialized nor started. The connection string (`postgres://user:password@host:5
 `host=... user=... password=...`) is never accepted on the command line, because Setup logs its
 command line. A typed string reaches the launcher through an environment variable of the Setup
 process; either way the launcher stores it in `<data dir>\external-metadata-db.dsn` with an ACL
-limited to SYSTEM, Administrators and the installing account, and the service command line only names
+limited to SYSTEM and Administrators, and the service command line only names
 that file. An upgrade keeps the choice; leave the field empty to keep the stored string.
 
 ### LAN access over HTTPS
@@ -86,7 +86,7 @@ The certificate is one of:
   mode generates a self-signed certificate.
 
 Setup stores the certificate chain and key as PEM in `<data dir>\tls\databasus.crt` and
-`databasus.key`, with an ACL limited to SYSTEM, Administrators and the installing account, and adds
+`databasus.key`, with an ACL limited to SYSTEM and Administrators, and adds
 the inbound Windows Firewall rule `Databasus Web UI` for the port and `databasus.exe`, on the domain
 and private profiles (add the public profile yourself if the server's network is classified public).
 `/LOCALONLY`, or unchecking the option on a rerun, removes the rule; the uninstaller removes it too.
