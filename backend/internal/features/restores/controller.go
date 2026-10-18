@@ -17,6 +17,7 @@ type RestoreController struct {
 func (c *RestoreController) RegisterRoutes(router *gin.RouterGroup) {
 	router.GET("/restores/:backupId", c.GetRestores)
 	router.POST("/restores/:backupId/restore", c.RestoreBackup)
+	router.POST("/restores/:backupId/compatibility", c.CheckRestoreCompatibility)
 	router.POST("/restores/cancel/:restoreId", c.CancelRestore)
 }
 
@@ -86,6 +87,51 @@ func (c *RestoreController) RestoreBackup(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{"message": "restore started successfully"})
+}
+
+// CheckRestoreCompatibility
+// @Summary Check whether a restore target is older than the dump client
+// @Description Detects the target server version and reports whether it is older than the PostgreSQL client that produced the dump. The restore stays allowed; this only drives a warning.
+// @Tags restores
+// @Accept json
+// @Produce json
+// @Param backupId path string true "Backup ID"
+// @Param request body restores_core.RestoreBackupRequest true "Restore target"
+// @Success 200 {object} restores_core.RestoreCompatibilityResponse
+// @Failure 400
+// @Failure 401
+// @Router /restores/{backupId}/compatibility [post]
+func (c *RestoreController) CheckRestoreCompatibility(ctx *gin.Context) {
+	user, ok := users_middleware.GetUserFromContext(ctx)
+	if !ok {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	backupID, err := uuid.Parse(ctx.Param("backupId"))
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid backup ID"})
+		return
+	}
+
+	var requestDTO restores_core.RestoreBackupRequest
+	if err := ctx.ShouldBindJSON(&requestDTO); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	response, err := c.restoreService.CheckRestoreCompatibility(
+		ctx.Request.Context(),
+		user,
+		backupID,
+		requestDTO,
+	)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, response)
 }
 
 // CancelRestore

@@ -15,6 +15,7 @@ import { type Database, DatabaseType } from '../../../entity/databases';
 import {
   RESTORE_STATUS_LABEL_KEYS,
   type Restore,
+  type RestoreCompatibility,
   RestoreStatus,
   restoreApi,
 } from '../../../entity/restores';
@@ -90,6 +91,10 @@ export const RestoresComponent = ({ database, backup }: Props) => {
   const [showCancelConfirmation, setShowCancelConfirmation] = useState(false);
   const [restoreToCancelId, setRestoreToCancelId] = useState<string | undefined>();
 
+  const [olderTargetWarning, setOlderTargetWarning] = useState<
+    { database: Database; compatibility: RestoreCompatibility } | undefined
+  >();
+
   const isReloadInProgress = useRef(false);
 
   const loadRestores = async () => {
@@ -121,6 +126,28 @@ export const RestoresComponent = ({ database, backup }: Props) => {
     } catch (e) {
       alert(translateApiError(e, t));
     }
+  };
+
+  // A target older than the dump client only warns: the user can still restore. A failed check
+  // is not fatal either, the restore request itself reports the real problem.
+  const requestRestore = async (editingDatabase: Database) => {
+    if (database.type === DatabaseType.POSTGRES_LOGICAL) {
+      try {
+        const compatibility = await restoreApi.checkRestoreCompatibility({
+          backupId: backup.id,
+          postgresql: editingDatabase.postgresqlLogical,
+        });
+
+        if (compatibility.isTargetOlderThanDumpClient) {
+          setOlderTargetWarning({ database: editingDatabase, compatibility });
+          return;
+        }
+      } catch {
+        // fall through to the restore request
+      }
+    }
+
+    await restore(editingDatabase);
   };
 
   const cancelRestore = async (restoreId: string) => {
@@ -169,10 +196,34 @@ export const RestoresComponent = ({ database, backup }: Props) => {
           isSaveToApi={false}
           onSaved={(database) => {
             setEditingDatabase({ ...database });
-            restore(database);
+            requestRestore(database);
           }}
           isRestoreMode={true}
         />
+
+        {olderTargetWarning && (
+          <ConfirmationComponent
+            onConfirm={() => {
+              const { database: targetDatabase } = olderTargetWarning;
+              setOlderTargetWarning(undefined);
+              restore(targetDatabase);
+            }}
+            onDecline={() => setOlderTargetWarning(undefined)}
+            description={
+              <>
+                <div>
+                  {t('restores.olderTargetWarning.message', {
+                    clientVersion: olderTargetWarning.compatibility.dumpClientMajorVersion,
+                    targetVersion: olderTargetWarning.compatibility.targetMajorVersion,
+                  })}
+                </div>
+                <div className="mt-5">{t('restores.olderTargetWarning.question')}</div>
+              </>
+            }
+            actionText={t('restores.olderTargetWarning.confirm')}
+            actionButtonColor="blue"
+          />
+        )}
       </>
     );
   }

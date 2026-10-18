@@ -745,6 +745,12 @@ export const fr: typeof en = {
       question: 'Voulez-vous vraiment annuler ?',
       confirm: 'Oui, annuler la restauration',
     },
+    olderTargetWarning: {
+      message:
+        "Attention : cette sauvegarde a été produite avec les outils clients PostgreSQL {{clientVersion}}, mais le serveur cible exécute PostgreSQL {{targetVersion}}. Un dump issu d'un client plus récent peut échouer à la restauration sur un serveur plus ancien, par exemple à cause de paramètres que l'ancien serveur ne connaît pas.",
+      question: 'Voulez-vous restaurer malgré tout ?',
+      confirm: 'Restaurer malgré tout',
+    },
   },
   healthcheck: {
     attempts: {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -21,6 +22,19 @@ func GetPostgresqlExecutable(
 		getPostgresqlBinDir(getPostgresqlBundleVersion(serverVersion)),
 		string(executable),
 	)
+}
+
+// GetPostgresqlClientMajorVersion returns the major version of the client
+// bundle that serves a server of the given version, or 0 when it cannot be
+// read. Backups record it so the restore screen can warn when the target
+// server is older than the client that produced the dump.
+func GetPostgresqlClientMajorVersion(serverVersion PostgresqlVersion) int {
+	major, err := strconv.Atoi(string(getPostgresqlBundleVersion(serverVersion)))
+	if err != nil {
+		return 0
+	}
+
+	return major
 }
 
 func getPostgresqlBinDir(version PostgresqlVersion) string {

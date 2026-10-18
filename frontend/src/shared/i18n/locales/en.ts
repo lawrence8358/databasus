@@ -721,6 +721,12 @@ export const en = {
       question: 'Are you sure you want to cancel?',
       confirm: 'Yes, cancel restore',
     },
+    olderTargetWarning: {
+      message:
+        'Warning: this backup was dumped with PostgreSQL {{clientVersion}} client tools, but the target server runs PostgreSQL {{targetVersion}}. A dump from a newer client may fail to restore onto an older server, for example because of settings the older server does not know.',
+      question: 'Do you want to restore anyway?',
+      confirm: 'Restore anyway',
+    },
   },
   healthcheck: {
     attempts: {

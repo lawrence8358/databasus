@@ -14,6 +14,8 @@ export interface LogicalBackup {
   backupRawDbSizeMb: number;
   backupDurationMs: number;
   encryption: BackupEncryption;
+  // major version of the pg_dump client that produced the dump; 0 when unknown
+  dumpClientMajorVersion?: number;
   restoreVerificationStatus?: RestoreVerificationStatus;
   createdAt: Date;
 }

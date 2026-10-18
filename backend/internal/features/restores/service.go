@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -199,6 +200,69 @@ func (s *RestoreService) RestoreBackupWithAuth(
 	})
 
 	return nil
+}
+
+// CheckRestoreCompatibility detects the target server version and reports whether it is older
+// than the client that produced the dump. It only warns: the restore itself stays allowed.
+func (s *RestoreService) CheckRestoreCompatibility(
+	ctx context.Context,
+	user *users_models.User,
+	backupID uuid.UUID,
+	requestDTO restores_core.RestoreBackupRequest,
+) (*restores_core.RestoreCompatibilityResponse, error) {
+	backup, err := s.backupService.GetBackup(backupID)
+	if err != nil {
+		return nil, err
+	}
+
+	database, err := s.databaseService.GetDatabaseByID(backup.DatabaseID)
+	if err != nil {
+		return nil, err
+	}
+
+	if database.WorkspaceID == nil {
+		return nil, errors.New("cannot check restore compatibility for database without workspace")
+	}
+
+	canAccess, _, err := s.workspaceService.CanUserAccessWorkspace(
+		ctx,
+		*database.WorkspaceID,
+		user,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if !canAccess {
+		return nil, errors.New("insufficient permissions to restore this backup")
+	}
+
+	response := &restores_core.RestoreCompatibilityResponse{
+		DumpClientMajorVersion: backup.DumpClientMajorVersion,
+	}
+
+	// Only PostgreSQL dumps carry a client version to compare against.
+	if database.Type != databases.DatabaseTypePostgresLogical {
+		return response, nil
+	}
+
+	if requestDTO.PostgresqlLogicalDatabase == nil {
+		return nil, errors.New("postgresql database configuration is required for restore")
+	}
+
+	if err := s.populateRestoreTargetVersionThroughTunnel(ctx, database, requestDTO); err != nil {
+		return nil, err
+	}
+
+	targetVersion := requestDTO.PostgresqlLogicalDatabase.Version
+	targetMajorVersion, _ := strconv.Atoi(string(targetVersion))
+
+	response.TargetMajorVersion = targetMajorVersion
+	response.IsTargetOlderThanDumpClient = tools.IsRestoreServerOlderThanDumpClient(
+		backup.DumpClientMajorVersion,
+		targetVersion,
+	)
+
+	return response, nil
 }
 
 func (s *RestoreService) CancelRestore(

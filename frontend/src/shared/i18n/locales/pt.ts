@@ -737,6 +737,12 @@ export const pt: typeof en = {
       question: 'Tem certeza de que deseja cancelar?',
       confirm: 'Sim, cancelar restauração',
     },
+    olderTargetWarning: {
+      message:
+        'Atenção: este backup foi gerado com as ferramentas cliente do PostgreSQL {{clientVersion}}, mas o servidor de destino executa o PostgreSQL {{targetVersion}}. Um dump de um cliente mais novo pode falhar ao ser restaurado em um servidor mais antigo, por exemplo por causa de configurações que o servidor antigo não reconhece.',
+      question: 'Deseja restaurar mesmo assim?',
+      confirm: 'Restaurar mesmo assim',
+    },
   },
   healthcheck: {
     attempts: {
