@@ -21,7 +21,8 @@
 ;                   choice and certificate unless one of them is given.
 ; Upgrade:          run a newer setup over the installed one; it keeps the earlier data folder,
 ;                   backups folder and port (/DATADIR, /BACKUPSDIR and /PORT are ignored) and refuses,
-;                   before stopping the service, a metadata database of another PostgreSQL major.
+;                   before stopping the service, a metadata database of another PostgreSQL major. It also
+;                   refuses an older version over a newer one (exit code 7 when silent).
 ; Silent uninstall: "<install dir>\unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES [/DELETEDATA]
 
 #ifndef AppVersion
@@ -219,37 +220,6 @@ begin
     Result := 'The Web UI port must be a number from 1 to 65535.';
 end;
 
-{ Asks the launcher, which evaluates the folders' permissions for the LocalSystem service account
-  and checks the port is free. Returns the problems, one per line, or '' when there are none. }
-function CheckChoices(const CheckFolders, CheckPort: Boolean): String;
-var
-  Params, Output: String;
-  ExitCode: Integer;
-begin
-  Result := '';
-  if CheckPort then
-  begin
-    Result := ValidatePort(GetPort(''));
-    if Result <> '' then
-      exit;
-  end;
-
-  Params := 'check-install';
-  if CheckFolders then
-    Params := Params + ' -data-dir "' + GetDataDir('') + '" -backups-dir "' + GetBackupsDir('') + '"';
-  { On a reinstall the running service holds its own port, so only a fresh install checks it. }
-  if CheckPort and not IsServiceInstalled then
-    Params := Params + ' -port ' + GetPort('');
-
-  ExitCode := RunAndCapture(GetLauncherForChecks, Params, Output);
-  if ExitCode <> 0 then
-  begin
-    Result := Trim(Output);
-    if Result = '' then
-      Result := 'The installation checks failed (exit code ' + IntToStr(ExitCode) + ').';
-  end;
-end;
-
 { ---------- external metadata database ---------- }
 
 { The connection string holds a password, so it never goes on a command line (visible to other
@@ -389,6 +359,41 @@ begin
   if SourceFile <> '' then
     Params := Params + ' -file "' + SourceFile + '"';
   Result := RunExternalDbCommand(Params, Failure) = 0;
+end;
+
+{ Asks the launcher, which evaluates the folders' permissions for the LocalSystem service account,
+  checks that a bundled metadata cluster in the data folder matches the bundled PostgreSQL major
+  (skipped with an external metadata database) and checks the port is free. Returns the problems,
+  one per line, or '' when there are none. }
+function CheckChoices(const CheckFolders, CheckPort: Boolean): String;
+var
+  Params, Output: String;
+  ExitCode: Integer;
+begin
+  Result := '';
+  if CheckPort then
+  begin
+    Result := ValidatePort(GetPort(''));
+    if Result <> '' then
+      exit;
+  end;
+
+  Params := 'check-install';
+  if CheckFolders then
+    Params := Params + ' -data-dir "' + GetDataDir('') + '" -backups-dir "' + GetBackupsDir('') + '"';
+  if CheckFolders and IsExternalDbChosen then
+    Params := Params + ' -external-metadata-db';
+  { On a reinstall the running service holds its own port, so only a fresh install checks it. }
+  if CheckPort and not IsServiceInstalled then
+    Params := Params + ' -port ' + GetPort('');
+
+  ExitCode := RunAndCapture(GetLauncherForChecks, Params, Output);
+  if ExitCode <> 0 then
+  begin
+    Result := Trim(Output);
+    if Result = '' then
+      Result := 'The installation checks failed (exit code ' + IntToStr(ExitCode) + ').';
+  end;
 end;
 
 procedure ExternalDbCheckBoxClick(Sender: TObject);
@@ -824,6 +829,82 @@ begin
   Result := IsUpgradeCached;
 end;
 
+{ ---------- downgrade ---------- }
+
+{ The newer version may already have migrated the metadata database to a schema the older one does
+  not know, so Setup refuses to install an older version over a newer one. Versions compare by
+  major.minor.patch; a pre-release suffix (3.2.0-rc1) is ignored. Development and CI builds are
+  0.0.0-<suffix> and skip the check, so they can be installed over a release for testing. }
+function ParseReleaseVersion(const Version: String; var Packed: Int64): Boolean;
+var
+  Core: String;
+  DashPos: Integer;
+begin
+  Core := Trim(Version);
+  if (Core <> '') and ((Core[1] = 'v') or (Core[1] = 'V')) then
+    Delete(Core, 1, 1);
+  DashPos := Pos('-', Core);
+  if DashPos > 0 then
+    Core := Copy(Core, 1, DashPos - 1);
+  Result := StrToVersion(Core, Packed);
+end;
+
+function GetDowngradeReason: String;
+var
+  Installed: String;
+  InstalledPacked, SetupPacked, DevelopmentPacked: Int64;
+begin
+  Result := '';
+  if not IsUpgrade then
+    exit;
+
+  Installed := GetPreviousSetting('Version', '');
+  if not ParseReleaseVersion('{#AppVersion}', SetupPacked) or not ParseReleaseVersion(Installed, InstalledPacked) then
+  begin
+    Log('Cannot compare the installed version "' + Installed + '" with {#AppVersion}; not checking for a downgrade');
+    exit;
+  end;
+
+  StrToVersion('0.0.0', DevelopmentPacked);
+  if ComparePackedVersion(SetupPacked, DevelopmentPacked) = 0 then
+  begin
+    Log('Development build {#AppVersion}; not checking for a downgrade');
+    exit;
+  end;
+
+  if ComparePackedVersion(SetupPacked, InstalledPacked) < 0 then
+    Result := 'Databasus ' + Installed + ' is installed, which is newer than this Setup ({#AppVersion}). ' +
+      'Setup cannot install an older version over a newer one, because the newer version may already have ' +
+      'changed its metadata database. Run Setup of version ' + Installed + ' or newer instead.';
+end;
+
+{ Interactive Setup says so before the wizard; silent Setup refuses in PrepareToInstall so it exits
+  with code 7 like the other checks. Both run before the service is stopped. }
+<event('InitializeSetup')>
+function DowngradeInitializeSetup: Boolean;
+var
+  Reason: String;
+begin
+  Result := True;
+  if WizardSilent then
+    exit;
+  Reason := GetDowngradeReason;
+  if Reason <> '' then
+  begin
+    Log('Refusing a downgrade: ' + Reason);
+    MsgBox(Reason + #13#10 + #13#10 + 'Nothing has been changed.', mbCriticalError, MB_OK);
+    Result := False;
+  end;
+end;
+
+<event('PrepareToInstall')>
+function DowngradePrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  Result := '';
+  if WizardSilent then
+    Result := GetDowngradeReason;
+end;
+
 { Moving the folders during an upgrade would start the service on an empty data folder, so the
   previous choices win over /DATADIR, /BACKUPSDIR and /PORT. }
 procedure KeepPreviousSettingsOnUpgrade;
@@ -966,7 +1047,12 @@ begin
   else if CurPageID = PortPage.ID then
     Problems := CheckChoices(False, True)
   else if CurPageID = ExternalDbPage.ID then
-    Problems := CheckExternalDb
+  begin
+    Problems := CheckExternalDb;
+    { The folders page ran before this choice was final; a bundled database needs the cluster check. }
+    if (Problems = '') and not IsExternalDbChosen then
+      Problems := CheckChoices(True, False);
+  end
   else if CurPageID = LanAccessPage.ID then
     Problems := CheckLanAccess;
 
@@ -1143,8 +1229,8 @@ begin
       Result := True;
 end;
 
-{ Guards the "delete all data" option against a folder setting that points at a drive root or a
-  system folder, which DelTree would otherwise wipe. }
+{ Guards the "delete all data" option against a data folder setting that points at a drive root or
+  a system folder, which DelTree would otherwise wipe. }
 function IsSafeToDelete(const Folder: String): Boolean;
 var
   Normalized: String;
@@ -1173,12 +1259,13 @@ begin
     IsDeleteDataRequested := MsgBox(
       'Databasus keeps its data and backups when it is uninstalled:' + #13#10 + #13#10 +
       '  ' + UninstallDataDir + #13#10 + '  ' + UninstallBackupsDir + #13#10 + #13#10 +
-      'Do you also want to delete ALL data, including every backup in the backups folder?',
+      'Do you also want to delete ALL data, including every backup Databasus made in the backups folder? ' +
+      'Other files in the backups folder are kept.',
       mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES;
 
   if IsDeleteDataRequested then
     IsDeleteDataRequested := MsgBox(
-      'This permanently deletes the metadata database, the secret key and all backups.' + #13#10 + #13#10 +
+      'This permanently deletes the metadata database, the secret key and all backups Databasus made.' + #13#10 + #13#10 +
       'Without the secret key, encrypted settings and encrypted backups can never be recovered, ' +
       'even if you reinstall Databasus.' + #13#10 + #13#10 +
       'Delete all data?',
@@ -1198,6 +1285,126 @@ begin
     Log('Could not delete all of ' + Folder);
 end;
 
+{ The backups folder may be shared with other programs (D:\Backups), so only what Databasus wrote
+  there is deleted, recognized by the names the local storage gives it:
+    <database>-<yyyymmdd>-<hhmmss>-<backup id>[...]            logical backups and their sidecars
+    <database>-FULL|INCR-<yyyymmdd>-<hhmmss>-<backup id>-...   physical backups and manifests
+    <database id>-WAL-tl<n>-<segment>-<attempt id>.zst[...]     WAL segments
+    temp\ (files being written, restore_<id>* folders, pg_restore_toc_*.list, test_connection)
+    wal-queue\<database id>\                                  WAL waiting for upload
+  temp, wal-queue and the folder itself are removed only when nothing else is left in them. }
+function IsCharIn(const Text: String; Index: Integer; const Allowed: String): Boolean;
+begin
+  Result := (Index >= 1) and (Index <= Length(Text)) and (Pos(Text[Index], Allowed) > 0);
+end;
+
+function IsRunOf(const Text: String; Start, Count: Integer; const Allowed: String): Boolean;
+var
+  I: Integer;
+begin
+  Result := True;
+  for I := Start to Start + Count - 1 do
+    if not IsCharIn(Text, I, Allowed) then
+    begin
+      Result := False;
+      exit;
+    end;
+end;
+
+{ A lowercase UUID such as 1b4e28ba-2fa1-11d2-883f-0016d3cca427 starting at Index. }
+function IsUuidAt(const Text: String; Index: Integer): Boolean;
+var
+  Hex: String;
+begin
+  Hex := '0123456789abcdef';
+  Result := IsRunOf(Text, Index, 8, Hex) and IsCharIn(Text, Index + 8, '-') and
+    IsRunOf(Text, Index + 9, 4, Hex) and IsCharIn(Text, Index + 13, '-') and
+    IsRunOf(Text, Index + 14, 4, Hex) and IsCharIn(Text, Index + 18, '-') and
+    IsRunOf(Text, Index + 19, 4, Hex) and IsCharIn(Text, Index + 23, '-') and
+    IsRunOf(Text, Index + 24, 12, Hex);
+end;
+
+{ "-yyyymmdd-hhmmss-" right before Index. }
+function IsTimestampBefore(const Text: String; Index: Integer): Boolean;
+var
+  Digits: String;
+begin
+  Digits := '0123456789';
+  Result := IsCharIn(Text, Index - 17, '-') and IsRunOf(Text, Index - 16, 8, Digits) and
+    IsCharIn(Text, Index - 8, '-') and IsRunOf(Text, Index - 7, 6, Digits) and IsCharIn(Text, Index - 1, '-');
+end;
+
+function IsDatabasusBackupFileName(const Name: String): Boolean;
+var
+  I: Integer;
+begin
+  Result := IsUuidAt(Name, 1) and (Copy(Name, 37, 7) = '-WAL-tl');
+  I := 18;
+  while not Result and (I + 35 <= Length(Name)) do
+  begin
+    Result := IsUuidAt(Name, I) and IsTimestampBefore(Name, I);
+    I := I + 1;
+  end;
+end;
+
+function IsDatabasusTempEntryName(const Name: String; IsFolder: Boolean): Boolean;
+begin
+  if IsFolder then
+    Result := (Copy(Name, 1, 8) = 'restore_') and IsUuidAt(Name, 9)
+  else
+    Result := IsDatabasusBackupFileName(Name) or (Name = 'test_connection') or
+      ((Copy(Name, 1, 15) = 'pg_restore_toc_') and (Copy(Name, Length(Name) - 4, 5) = '.list'));
+end;
+
+{ Kind: 0 for the backups folder, 1 for its temp folder, 2 for its wal-queue folder. }
+procedure DeleteDatabasusEntries(const Folder: String; Kind: Integer);
+var
+  FindRec: TFindRec;
+  Path: String;
+  IsFolder, IsOurs: Boolean;
+begin
+  if not FindFirst(AddBackslash(Folder) + '*', FindRec) then
+    exit;
+  try
+    repeat
+      if (FindRec.Name = '.') or (FindRec.Name = '..') then
+        continue;
+      Path := AddBackslash(Folder) + FindRec.Name;
+      IsFolder := FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY <> 0;
+      case Kind of
+        1: IsOurs := IsDatabasusTempEntryName(FindRec.Name, IsFolder);
+        2: IsOurs := IsFolder and IsUuidAt(FindRec.Name, 1) and (Length(FindRec.Name) = 36);
+      else
+        IsOurs := not IsFolder and IsDatabasusBackupFileName(FindRec.Name);
+      end;
+      if not IsOurs then
+        Log('Keeping ' + Path + ': Databasus did not create it')
+      else if IsFolder then
+      begin
+        if not DelTree(Path, True, True, True) then
+          Log('Could not delete all of ' + Path);
+      end
+      else if not DeleteFile(Path) then
+        Log('Could not delete ' + Path);
+    until not FindNext(FindRec);
+  finally
+    FindClose(FindRec);
+  end;
+end;
+
+procedure DeleteBackupsFolder(const Folder: String);
+begin
+  if (Trim(Folder) = '') or not DirExists(Folder) then
+    exit;
+  DeleteDatabasusEntries(AddBackslash(Folder) + 'temp', 1);
+  RemoveDir(AddBackslash(Folder) + 'temp');
+  DeleteDatabasusEntries(AddBackslash(Folder) + 'wal-queue', 2);
+  RemoveDir(AddBackslash(Folder) + 'wal-queue');
+  DeleteDatabasusEntries(Folder, 0);
+  if not RemoveDir(Folder) then
+    Log('Keeping ' + Folder + ': it still holds files Databasus did not create');
+end;
+
 procedure InitializeUninstallProgressForm;
 begin
   AskWhetherToDeleteData;
@@ -1208,7 +1415,7 @@ begin
   if (CurUninstallStep = usPostUninstall) and IsDeleteDataRequested then
   begin
     Log('Deleting all data as requested');
-    DeleteDataFolder(UninstallBackupsDir);
+    DeleteBackupsFolder(UninstallBackupsDir);
     DeleteDataFolder(UninstallDataDir);
   end;
 end;
