@@ -274,6 +274,18 @@ export const pt: typeof en = {
       sendTestEmail: 'Enviar e-mail de teste',
       testEmailSent: 'E-mail de teste enviado para {{email}}',
     },
+    backupsFolder: {
+      title: 'Pasta de backups',
+      description:
+        'O armazenamento local grava os novos backups nesta pasta. Trocar a pasta não move nada: os backups anteriores ficam onde estão e continuam podendo ser restaurados.',
+      currentFolder: 'Pasta atual',
+      previousFolders: 'Pastas anteriores, que ainda guardam backups mais antigos:',
+      newFolder: 'Nova pasta',
+      rules:
+        'Use uma pasta em um disco local fixo deste computador, não a raiz de uma unidade, uma unidade de rede ou removível, nem uma pasta do Windows ou de programas. O Databasus cria a pasta se ela não existir e verifica se o serviço consegue gravar nela.',
+      change: 'Trocar pasta',
+      changed: 'Os novos backups agora vão para {{folder}}',
+    },
     healthcheck: {
       title: 'Verificação de disponibilidade',
       openInNewTab: 'Abrir em uma nova aba',
@@ -736,6 +748,12 @@ export const pt: typeof en = {
         '<bold>⚠️ Atenção:</bold> se você cancelar esta restauração, o banco de dados provavelmente ficará corrompido ou incompleto. Será preciso recriá-lo antes de tentar outra restauração.',
       question: 'Tem certeza de que deseja cancelar?',
       confirm: 'Sim, cancelar restauração',
+    },
+    olderTargetWarning: {
+      message:
+        'Atenção: este backup foi gerado com as ferramentas cliente do PostgreSQL {{clientVersion}}, mas o servidor de destino executa o PostgreSQL {{targetVersion}}. Um dump de um cliente mais novo pode falhar ao ser restaurado em um servidor mais antigo, por exemplo por causa de configurações que o servidor antigo não reconhece.',
+      question: 'Deseja restaurar mesmo assim?',
+      confirm: 'Restaurar mesmo assim',
     },
   },
   healthcheck: {

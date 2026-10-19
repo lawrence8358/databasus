@@ -38,6 +38,12 @@ type LogicalBackup struct {
 	// pull a matching engine image (pg_restore cannot cross extension versions).
 	TimescaledbVersion string `json:"timescaledbVersion" gorm:"column:timescaledb_version;type:text;not null;default:''"`
 
+	// DumpClientMajorVersion is the major version of the PostgreSQL client (pg_dump) that
+	// produced the dump, or 0 when unknown (older backups, non-PostgreSQL engines). A dump
+	// from a newer client may not restore onto an older server, so the restore screen
+	// compares the target server against it.
+	DumpClientMajorVersion int `json:"dumpClientMajorVersion" gorm:"column:dump_client_major_version;type:int;not null;default:0"`
+
 	CreatedAt time.Time `json:"createdAt" gorm:"column:created_at"`
 }
 

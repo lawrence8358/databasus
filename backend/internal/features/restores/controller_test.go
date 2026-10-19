@@ -567,6 +567,101 @@ func Test_RestoreBackup_WithParallelRestoreInProgress_ReturnsError(t *testing.T)
 	assert.Contains(t, string(response.Body), "another restore is already in progress")
 }
 
+func Test_CheckRestoreCompatibility_ByDumpClientVersion_ReportsWhetherTargetIsOlder(t *testing.T) {
+	router := createTestRouter()
+
+	owner := users_testing.CreateTestUser(t.Context(), users_enums.UserRoleMember)
+	workspace := workspaces_testing.CreateTestWorkspace(t.Context(), "Test Workspace", owner, router)
+	defer workspaces_testing.RemoveTestWorkspace(t.Context(), workspace, router)
+
+	database, backup := createTestDatabaseWithBackupForRestore(t.Context(), workspace, owner, router)
+	defer cleanupDatabaseWithBackup(t.Context(), database, backup)
+
+	// The target version is detected from the live server, so the request carries a deliberately
+	// wrong version to prove the response reflects the real PostgreSQL 16 server.
+	endpoint := containers.StartPostgres(t, "postgres:16")
+	targetDatabase := "testdb"
+
+	request := restores_core.RestoreBackupRequest{
+		PostgresqlLogicalDatabase: &postgresql_logical.PostgresqlLogicalDatabase{
+			Version:  tools.PostgresqlVersion12,
+			Host:     endpoint.Host,
+			Port:     endpoint.Port,
+			Username: containers.PostgresUsername,
+			Password: containers.PostgresPassword,
+			Database: &targetDatabase,
+			CpuCount: 1,
+		},
+	}
+
+	dumpClientCases := []struct {
+		name                   string
+		dumpClientMajorVersion int
+		isWarningExpected      bool
+	}{
+		{"target older than dump client", 18, true},
+		{"target one major older than dump client", 17, true},
+		{"target same version as dump client", 16, false},
+		{"target newer than dump client", 15, false},
+		{"dump client version unknown", 0, false},
+	}
+
+	for _, dumpClientCase := range dumpClientCases {
+		t.Run(dumpClientCase.name, func(t *testing.T) {
+			backup.DumpClientMajorVersion = dumpClientCase.dumpClientMajorVersion
+			repo := &backups_core_logical.BackupRepository{}
+			assert.NoError(t, repo.Save(backup))
+
+			var response restores_core.RestoreCompatibilityResponse
+			test_utils.MakePostRequestAndUnmarshal(
+				t,
+				router,
+				fmt.Sprintf("/api/v1/restores/%s/compatibility", backup.ID.String()),
+				"Bearer "+owner.Token,
+				request,
+				http.StatusOK,
+				&response,
+			)
+
+			assert.Equal(t, dumpClientCase.isWarningExpected, response.IsTargetOlderThanDumpClient)
+			assert.Equal(t, dumpClientCase.dumpClientMajorVersion, response.DumpClientMajorVersion)
+			assert.Equal(t, 16, response.TargetMajorVersion)
+		})
+	}
+}
+
+func Test_CheckRestoreCompatibility_WhenUserIsNotWorkspaceMember_ReturnsForbidden(t *testing.T) {
+	router := createTestRouter()
+
+	owner := users_testing.CreateTestUser(t.Context(), users_enums.UserRoleMember)
+	workspace := workspaces_testing.CreateTestWorkspace(t.Context(), "Test Workspace", owner, router)
+	defer workspaces_testing.RemoveTestWorkspace(t.Context(), workspace, router)
+
+	database, backup := createTestDatabaseWithBackupForRestore(t.Context(), workspace, owner, router)
+	defer cleanupDatabaseWithBackup(t.Context(), database, backup)
+
+	nonMember := users_testing.CreateTestUser(t.Context(), users_enums.UserRoleMember)
+
+	request := restores_core.RestoreBackupRequest{
+		PostgresqlLogicalDatabase: &postgresql_logical.PostgresqlLogicalDatabase{
+			Version: tools.PostgresqlVersion16,
+			Host:    env_config.GetEnv().TestLocalhost,
+			Port:    5432,
+		},
+	}
+
+	response := test_utils.MakePostRequest(
+		t,
+		router,
+		fmt.Sprintf("/api/v1/restores/%s/compatibility", backup.ID.String()),
+		"Bearer "+nonMember.Token,
+		request,
+		http.StatusBadRequest,
+	)
+
+	assert.Contains(t, string(response.Body), "insufficient permissions")
+}
+
 func createTestRouter() *gin.Engine {
 	return CreateTestRouter()
 }

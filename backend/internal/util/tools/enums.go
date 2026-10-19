@@ -28,6 +28,7 @@ type PostgresqlExecutable string
 
 const (
 	PostgresqlExecutablePgDump          PostgresqlExecutable = "pg_dump"
+	PostgresqlExecutablePgRestore       PostgresqlExecutable = "pg_restore"
 	PostgresqlExecutablePsql            PostgresqlExecutable = "psql"
 	PostgresqlExecutablePgBasebackup    PostgresqlExecutable = "pg_basebackup"
 	PostgresqlExecutablePgReceivewal    PostgresqlExecutable = "pg_receivewal"
@@ -69,4 +70,24 @@ func IsBackupDbVersionHigherThanRestoreDbVersion(
 	}
 
 	return backupDbVersionInt > restoreDbVersionInt
+}
+
+// IsRestoreServerOlderThanDumpClient reports whether a server of the given
+// version is older than the client that produced a dump. A dump from a newer
+// client does not always restore onto an older server. An unknown client
+// version (0) never counts as older.
+func IsRestoreServerOlderThanDumpClient(
+	dumpClientMajorVersion int,
+	restoreServerVersion PostgresqlVersion,
+) bool {
+	if dumpClientMajorVersion <= 0 {
+		return false
+	}
+
+	restoreServerMajorVersion, err := strconv.Atoi(string(restoreServerVersion))
+	if err != nil {
+		return false
+	}
+
+	return restoreServerMajorVersion < dumpClientMajorVersion
 }

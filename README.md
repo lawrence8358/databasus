@@ -248,6 +248,50 @@ For more options (NodePort, TLS, HTTPRoute for Gateway API), see the [Helm chart
 
 ---
 
+## 🪟 Windows native installer
+
+This fork (`lawrence8358/databasus`) also ships Databasus as a native Windows installer, for machines where Docker and WSL2 are not allowed. Why the fork departs from the Docker-only approach is recorded in [ADR-0015](adr/0015-windows-native-installer-in-fork.md).
+
+**Supported systems:** Windows Server 2016 or newer and Windows 10/11, x64 only. On any other Windows version or CPU architecture the installer says why and stops.
+
+**What works on Windows:**
+
+- Logical backup and restore of PostgreSQL 12 and newer (`pg_dump` / `pg_restore`). The databases themselves can run on any OS and are reached over the network
+- Local disk storage and the remote storages Databasus already supports (S3, Azure Blob, FTP, SFTP, etc.)
+- Schedules, retention policies, encryption and notifications work exactly as in the Docker version
+
+Only the newest PostgreSQL client tools are bundled. A newer `pg_dump` backs up every supported server version, but its dump may fail to restore into an older server; the restore screen warns about this.
+
+**Not available on Windows:**
+
+- MySQL, MariaDB and MongoDB
+- Physical and incremental backups, WAL streaming and PITR
+- Restore verification agent
+- Embedded physical restore scripts
+- Backing up Databasus's own metadata database
+- Network shares (UNC paths) as the backup directory
+- Running the service under a domain account or gMSA
+
+The Web UI hides the engines and backup modes that are not available.
+
+**Installation:**
+
+1. Run the installer `.exe` as an administrator. It needs no network access and installs the app, a bundled PostgreSQL server for Databasus's own metadata, and the PostgreSQL client tools. The installer is not code-signed yet, so Windows may warn about an unknown publisher
+2. Pick the program data directory (default `C:\ProgramData\Databasus`), which holds the metadata database, the secret key and the logs, and a backup directory on any local disk, for example `D:\`. The installer checks that the service account can write to both
+3. Pick the Web UI port. By default the Web UI listens on `127.0.0.1` only. To let colleagues reach it, enable LAN access: it always uses HTTPS, with a certificate you import or a self-signed one the installer generates
+4. Optionally, under advanced options, point Databasus at an external PostgreSQL database for metadata instead of the bundled one
+5. When the installer finishes, Databasus runs as an auto-start Windows Service that restarts after a crash, and your browser opens the Web UI. Start, stop or restart it from the Windows Services console
+
+The installer also has a silent mode where every option is passed on the command line, for scripted installs. The parameters are listed in [packaging/windows/README.md](packaging/windows/README.md).
+
+**Upgrading:** run the newer installer over the existing install. Settings, databases, schedules and backups are kept, metadata migrations run on their own, and the bundled PostgreSQL gets its minor updates with no data conversion.
+
+**Logs:** written to a folder under the program data directory. Startup problems, such as missing client tools or a metadata database that won't start, also go to the Windows Event Viewer.
+
+**Uninstalling:** by default the program data directory and the backup directory stay on disk. To remove them, tick the option to delete all data. Without the secret key in the program data directory, encrypted settings and encrypted backups cannot be recovered.
+
+---
+
 ## 🚀 Usage
 
 1. **Create the first account**: Navigate to `http://localhost:4005` and sign up. The first account created on an instance administers it

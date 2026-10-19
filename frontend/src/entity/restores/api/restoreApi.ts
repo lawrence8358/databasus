@@ -8,6 +8,7 @@ import type {
   PostgresqlLogicalDatabase,
 } from '../../databases';
 import type { Restore } from '../model/Restore';
+import type { RestoreCompatibility } from '../model/RestoreCompatibility';
 
 export const restoreApi = {
   async getRestores(backupId: string) {
@@ -43,6 +44,22 @@ export const restoreApi = {
 
     return apiHelper.fetchPostJson<{ message: string }>(
       `${getApplicationServer()}/api/v1/restores/${backupId}/restore`,
+      requestOptions,
+    );
+  },
+
+  async checkRestoreCompatibility({
+    backupId,
+    postgresql,
+  }: {
+    backupId: string;
+    postgresql?: PostgresqlLogicalDatabase;
+  }) {
+    const requestOptions: RequestOptions = new RequestOptions();
+    requestOptions.setBody(JSON.stringify({ postgresqlDatabase: postgresql }));
+
+    return apiHelper.fetchPostJson<RestoreCompatibility>(
+      `${getApplicationServer()}/api/v1/restores/${backupId}/compatibility`,
       requestOptions,
     );
   },

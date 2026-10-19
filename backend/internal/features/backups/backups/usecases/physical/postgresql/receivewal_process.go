@@ -8,7 +8,6 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	postgresql_physical "databasus-backend/internal/features/databases/databases/postgresql/physical"
@@ -256,12 +255,4 @@ func receivewalApplicationName(sourceDB *postgresql_physical.PostgresqlPhysicalD
 	}
 
 	return receivewalApplicationNamePrefix + sourceDB.DatabaseID.String()
-}
-
-// Pdeathsig makes the kernel SIGTERM pg_receivewal if the Databasus process
-// dies, so a crashed supervisor never leaks an orphaned receiver that keeps
-// holding the replication slot. Linux-only; Databasus ships Linux containers
-// exclusively.
-func setReceivewalProcessAttributes(cmd *exec.Cmd) {
-	cmd.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGTERM}
 }

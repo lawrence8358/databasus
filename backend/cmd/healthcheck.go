@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -20,7 +22,7 @@ func checkServerAlive(baseURL string) error {
 		return err
 	}
 
-	response, err := http.DefaultClient.Do(request)
+	response, err := newHealthcheckClient(baseURL).Do(request)
 	if err != nil {
 		return err
 	}
@@ -35,8 +37,26 @@ func checkServerAlive(baseURL string) error {
 	return nil
 }
 
+// The healthcheck asks this computer's own server whether it is up; it trusts nothing it receives,
+// so it accepts the self-signed certificate an installer may have generated.
+func newHealthcheckClient(baseURL string) *http.Client {
+	if !strings.HasPrefix(baseURL, "https://") {
+		return http.DefaultClient
+	}
+
+	return &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // liveness probe of the local server
+		},
+	}
+}
+
 func runHealthcheckCommand() {
-	err := checkServerAlive("http://localhost" + serverAddr)
+	address, err := getServerAddress()
+	if err == nil {
+		err = checkServerAlive(address.getLocalBaseURL())
+	}
+
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "healthcheck failed: %v\n", err)
 		os.Exit(1)

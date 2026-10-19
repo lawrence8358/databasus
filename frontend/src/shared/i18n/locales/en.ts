@@ -268,6 +268,18 @@ export const en = {
       sendTestEmail: 'Send test email',
       testEmailSent: 'Test email sent to {{email}}',
     },
+    backupsFolder: {
+      title: 'Backups folder',
+      description:
+        'Local storage writes new backups to this folder. Changing it moves nothing: earlier backups stay where they are and can still be restored.',
+      currentFolder: 'Current folder',
+      previousFolders: 'Earlier folders, which still hold older backups:',
+      newFolder: 'New folder',
+      rules:
+        'Use a folder on a local fixed disk of this computer, not a drive root, a network or removable drive, or a Windows or program folder. Databasus creates it when it is missing and checks that the service can write to it.',
+      change: 'Change folder',
+      changed: 'New backups now go to {{folder}}',
+    },
     healthcheck: {
       title: 'Health-check',
       openInNewTab: 'Click to open in new tab',
@@ -720,6 +732,12 @@ export const en = {
         '<bold>⚠️ Warning:</bold> Cancelling this restore will likely leave your database in a corrupted or incomplete state. You will need to recreate the database before attempting another restore.',
       question: 'Are you sure you want to cancel?',
       confirm: 'Yes, cancel restore',
+    },
+    olderTargetWarning: {
+      message:
+        'Warning: this backup was dumped with PostgreSQL {{clientVersion}} client tools, but the target server runs PostgreSQL {{targetVersion}}. A dump from a newer client may fail to restore onto an older server, for example because of settings the older server does not know.',
+      question: 'Do you want to restore anyway?',
+      confirm: 'Restore anyway',
     },
   },
   healthcheck: {

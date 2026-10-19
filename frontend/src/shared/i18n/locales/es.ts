@@ -274,6 +274,18 @@ export const es: typeof en = {
       sendTestEmail: 'Enviar correo de prueba',
       testEmailSent: 'Correo de prueba enviado a {{email}}',
     },
+    backupsFolder: {
+      title: 'Carpeta de copias de seguridad',
+      description:
+        'El almacenamiento local guarda las nuevas copias de seguridad en esta carpeta. Cambiarla no mueve nada: las copias anteriores se quedan donde están y se pueden seguir restaurando.',
+      currentFolder: 'Carpeta actual',
+      previousFolders: 'Carpetas anteriores, que aún guardan copias más antiguas:',
+      newFolder: 'Carpeta nueva',
+      rules:
+        'Use una carpeta en un disco local fijo de este equipo, no la raíz de una unidad, una unidad de red o extraíble, ni una carpeta de Windows o de programas. Databasus la crea si no existe y comprueba que el servicio puede escribir en ella.',
+      change: 'Cambiar carpeta',
+      changed: 'Las nuevas copias de seguridad se guardan ahora en {{folder}}',
+    },
     healthcheck: {
       title: 'Comprobación de disponibilidad',
       openInNewTab: 'Abrir en una pestaña nueva',
@@ -739,6 +751,12 @@ export const es: typeof en = {
         '<bold>⚠️ Advertencia:</bold> si cancela esta restauración, lo más probable es que la base de datos quede dañada o incompleta. Tendrá que volver a crearla antes de intentar otra restauración.',
       question: '¿Seguro que desea cancelar?',
       confirm: 'Sí, cancelar la restauración',
+    },
+    olderTargetWarning: {
+      message:
+        'Advertencia: esta copia se generó con las herramientas cliente de PostgreSQL {{clientVersion}}, pero el servidor de destino ejecuta PostgreSQL {{targetVersion}}. Es posible que un volcado de un cliente más nuevo no se restaure en un servidor más antiguo, por ejemplo por ajustes que el servidor antiguo no reconoce.',
+      question: '¿Desea restaurar de todos modos?',
+      confirm: 'Restaurar de todos modos',
     },
   },
   healthcheck: {

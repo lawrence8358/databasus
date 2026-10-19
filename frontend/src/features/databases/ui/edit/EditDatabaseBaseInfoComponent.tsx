@@ -11,6 +11,7 @@ import {
   initializeDatabaseTypeData,
   isPostgresType,
 } from '../../../../entity/databases';
+import { AvailabilityEngine, useAvailability } from '../../../../entity/system';
 import { translateApiError } from '../../../../shared/i18n';
 
 interface Props {
@@ -29,10 +30,10 @@ interface Props {
 // PostgreSQL maps to the logical type as a tentative default; the backup-type
 // (logical vs physical) is chosen on the next step.
 const databaseEngineTypes = [
-  DatabaseType.POSTGRES_LOGICAL,
-  DatabaseType.MYSQL,
-  DatabaseType.MARIADB,
-  DatabaseType.MONGODB,
+  { type: DatabaseType.POSTGRES_LOGICAL, engine: AvailabilityEngine.POSTGRESQL },
+  { type: DatabaseType.MYSQL, engine: AvailabilityEngine.MYSQL },
+  { type: DatabaseType.MARIADB, engine: AvailabilityEngine.MARIADB },
+  { type: DatabaseType.MONGODB, engine: AvailabilityEngine.MONGODB },
 ];
 
 export const EditDatabaseBaseInfoComponent = ({
@@ -80,6 +81,8 @@ export const EditDatabaseBaseInfoComponent = ({
     onSaved(editingDatabase);
   };
 
+  const { isEngineAvailable } = useAvailability();
+
   useEffect(() => {
     setIsSaving(false);
     setIsUnsaved(false);
@@ -89,6 +92,9 @@ export const EditDatabaseBaseInfoComponent = ({
   if (!editingDatabase) return null;
 
   const isAllFieldsFilled = !!editingDatabase.name?.trim();
+  const availableEngineTypes = databaseEngineTypes
+    .filter(({ engine }) => isEngineAvailable(engine))
+    .map(({ type }) => type);
 
   return (
     <div>
@@ -107,7 +113,7 @@ export const EditDatabaseBaseInfoComponent = ({
 
       {isShowEngine && (
         <div className="grid grid-cols-2 gap-3">
-          {databaseEngineTypes.map((engineType) => {
+          {availableEngineTypes.map((engineType) => {
             const isSelected = isPostgresType(engineType)
               ? isPostgresType(editingDatabase.type)
               : editingDatabase.type === engineType;

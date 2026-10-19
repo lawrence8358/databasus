@@ -39,6 +39,7 @@ import (
 	users_testing "databasus-backend/internal/features/users/testing"
 	workspaces_controllers "databasus-backend/internal/features/workspaces/controllers"
 	workspaces_testing "databasus-backend/internal/features/workspaces/testing"
+	"databasus-backend/internal/util/availability"
 	"databasus-backend/internal/util/encryption"
 	test_utils "databasus-backend/internal/util/testing"
 	"databasus-backend/internal/util/testing/bastion"
@@ -164,6 +165,78 @@ func Test_CreateDatabase_WhenUserIsNotWorkspaceMember_ReturnsForbidden(t *testin
 	)
 
 	assert.Contains(t, string(testResp.Body), "insufficient permissions")
+}
+
+func Test_CreateDatabase_WhenEngineOrFeatureIsUnavailable_ReturnsBadRequestBeforeConnecting(
+	t *testing.T,
+) {
+	// Every request points at a port nothing listens on, so a 400 that names the unavailable
+	// engine or feature proves the refusal came before any connection attempt.
+	testCases := []struct {
+		name                string
+		unavailableEngines  []availability.Engine
+		unavailableFeatures []availability.Feature
+		database            Database
+		refusalMessage      string
+	}{
+		{
+			name:               "MySQL engine unavailable",
+			unavailableEngines: []availability.Engine{availability.EngineMysql},
+			database: Database{
+				Type:  DatabaseTypeMysql,
+				Mysql: GetTestMysqlConfig("localhost", 1),
+			},
+			refusalMessage: "MySQL is not available on this instance",
+		},
+		{
+			name:                "physical backup unavailable",
+			unavailableFeatures: []availability.Feature{availability.FeaturePhysicalBackup},
+			database: Database{
+				Type: DatabaseTypePostgresPhysical,
+				PostgresqlPhysical: GetTestPhysicalPostgresConfigWithType(
+					"localhost", 1, "17", postgresql_physical.BackupTypeFullOnly,
+				),
+			},
+			refusalMessage: "physical backup is not available on this instance",
+		},
+		{
+			name:                "point-in-time recovery unavailable",
+			unavailableFeatures: []availability.Feature{availability.FeaturePitr},
+			database: Database{
+				Type: DatabaseTypePostgresPhysical,
+				PostgresqlPhysical: GetTestPhysicalPostgresConfigWithType(
+					"localhost", 1, "17", postgresql_physical.BackupTypeFullIncrementalAndWalStream,
+				),
+			},
+			refusalMessage: "point-in-time recovery is not available on this instance",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			availability.MarkUnavailableForTest(t, testCase.unavailableEngines, testCase.unavailableFeatures)
+
+			router := createTestRouter()
+			owner := users_testing.CreateTestUser(t.Context(), users_enums.UserRoleMember)
+			workspace := workspaces_testing.CreateTestWorkspace(t.Context(), "Test Workspace", owner, router)
+			defer workspaces_testing.RemoveTestWorkspace(t.Context(), workspace, router)
+
+			request := testCase.database
+			request.Name = "Unavailable Database"
+			request.WorkspaceID = &workspace.ID
+
+			response := test_utils.MakePostRequest(
+				t,
+				router,
+				"/api/v1/databases/create",
+				"Bearer "+owner.Token,
+				request,
+				http.StatusBadRequest,
+			)
+
+			assert.Contains(t, string(response.Body), testCase.refusalMessage)
+		})
+	}
 }
 
 func Test_CreateDatabase_WithoutConnectionFields_ValidationFails(t *testing.T) {

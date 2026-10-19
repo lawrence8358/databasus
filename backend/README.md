@@ -39,3 +39,85 @@ To apply or roll back migrations on the dev database, with the variables from `.
 Swagger URL is:
 
 > http://localhost:4005/api/v1/docs/swagger/index.html#/
+
+# Run natively on Windows
+
+The backend also builds as a Windows x64 executable, for the fork's Windows installer. It runs
+PostgreSQL logical backups only; the other engines and the physical backup features report as
+unavailable. A second program, the launcher, takes the place of the Docker image's entrypoint: it
+runs the bundled PostgreSQL server for the metadata database and starts the backend against it.
+From `backend/`, after generating the swagger docs:
+
+> GOOS=windows GOARCH=amd64 go build -o databasus.exe ./cmd
+>
+> GOOS=windows GOARCH=amd64 go build -o databasus-launcher.exe ./cmd/launcher
+
+Put `migrations/`, `assets/tools/win-x64/` (as `assets/tools/win-x64/`) and, for the Web UI, the
+built frontend (as `ui/build/`) next to both executables; they find them relative to their own
+location, not the working directory. Then start the launcher with a program data folder:
+
+> databasus-launcher.exe -data-dir C:\ProgramData\Databasus -backups-dir D:\DatabasusBackups
+
+On the first start it creates the metadata cluster in `<data-dir>\pgdata` with a random password,
+kept in `<data-dir>\metadata-db.password`. The server listens on `127.0.0.1:5437` (change it with
+`-metadata-db-port`) and accepts only password logins from that address; its log goes to
+`<data-dir>\logs`. The launcher writes `ui\build\runtime-config.js`, passes the connection string
+and the folders to `databasus.exe`, and on Ctrl+C stops the backend first and the database second.
+If the database server was killed, the next start lets PostgreSQL recover it; if it cannot start at
+all, the launcher resets its WAL once, as the Docker image does. The first start also records the
+backups folder (`-backups-dir`, default `<data-dir>\backups`) in `<data-dir>\backups-folder.txt`;
+from then on that file decides and `-backups-dir` is ignored with a warning, because the Web UI and
+Setup change the folder there. `databasus-launcher.exe backups-folder -data-dir <dir> -set <folder>`
+changes it from a command line. The Web UI and API listen on `127.0.0.1:4005`; change that with
+`-listen-host` (`""` for every interface) and `-port`, which reach the backend as
+`DATABASUS_LISTEN_HOST` and `DATABASUS_PORT` (unset, the backend listens on every interface at
+4005, as in Docker). The other backend settings, such as `SMTP_HOST`, are read from the
+environment as usual.
+
+A listen host other than loopback needs `-https`: the launcher refuses plain HTTP there. Store the
+certificate first, then run with it:
+
+> databasus-launcher.exe tls-setup -data-dir C:\ProgramData\Databasus -source self-signed
+>
+> databasus-launcher.exe -data-dir C:\ProgramData\Databasus -listen-host "" -https
+
+`tls-setup -source pfx -pfx <file>` imports a PFX instead (its password from
+`DATABASUS_PFX_PASSWORD`), and `-source existing` checks the stored one. The PEM files land in
+`<data-dir>\tls` with a restricted ACL, and reach the backend as `DATABASUS_TLS_CERT_FILE` and
+`DATABASUS_TLS_KEY_FILE`; with both set, the backend serves HTTPS only on its one listener.
+
+To run Databasus as a Windows service instead, register it from an administrator prompt with the
+same flags; they are stored, as absolute paths, in the service's command line. The backups folder is
+not one of them (`install` refuses `-backups-dir`); record it first:
+
+> databasus-launcher.exe backups-folder -data-dir C:\ProgramData\Databasus -set D:\DatabasusBackups
+>
+> databasus-launcher.exe install -data-dir C:\ProgramData\Databasus
+>
+> sc.exe start Databasus
+
+The `Databasus` service runs as LocalSystem, starts at boot, and is restarted by Windows 10, 30
+and 60 seconds after it crashes or stops with an error. Running `install` again updates the
+registration. Stopping the service stops the backend and then the database, as Ctrl+C does. The
+launcher's own log and the console output of the backend and the database server go to
+`<data-dir>\logs\launcher.log`; start and stop, and the reason the service stopped on its own,
+also go to the Application event log under the `Databasus` source.
+`databasus-launcher.exe uninstall` stops and removes the service and leaves the data folder alone.
+
+The offline installer in `packaging/windows` does all of this for you; see
+[packaging/windows/README.md](../packaging/windows/README.md).
+
+To run the backend alone against a PostgreSQL you manage yourself, skip the launcher:
+
+> set ENV_MODE=production
+>
+> set DATABASE_DSN=host=127.0.0.1 port=5432 user=postgres password=... dbname=databasus sslmode=disable
+>
+> set DATABASUS_DATA_DIR=C:\ProgramData\Databasus
+>
+> set DATABASUS_BACKUPS_DIR=D:\DatabasusBackups
+>
+> databasus.exe
+
+The bundled PostgreSQL programs need the Microsoft Visual C++ runtime (`VCRUNTIME140.dll`,
+`VCRUNTIME140_1.dll`, `MSVCP140.dll`), which most Windows machines already have.

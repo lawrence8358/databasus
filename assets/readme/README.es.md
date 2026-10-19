@@ -248,6 +248,50 @@ Para más opciones (NodePort, TLS, HTTPRoute para Gateway API), consulte el [REA
 
 ---
 
+## 🪟 Instalador nativo para Windows
+
+Este fork (`lawrence8358/databasus`) también publica Databasus como instalador nativo para Windows, pensado para equipos donde no se permite Docker ni WSL2. El motivo por el que el fork se aparta del enfoque de solo Docker está en el [ADR-0015](../../adr/0015-windows-native-installer-in-fork.md).
+
+**Sistemas compatibles:** Windows Server 2016 o posterior y Windows 10/11, solo x64. En cualquier otra versión de Windows o arquitectura de CPU, el instalador explica el motivo y se detiene.
+
+**Qué funciona en Windows:**
+
+- Copias de seguridad lógicas y restauración de PostgreSQL 12 o posterior (`pg_dump` / `pg_restore`). Las bases de datos pueden ejecutarse en cualquier sistema operativo y se accede a ellas por red
+- Almacenamiento en disco local y los almacenamientos remotos que Databasus ya admite (S3, Azure Blob, FTP, SFTP, etc.)
+- Las programaciones, las políticas de retención, el cifrado y las notificaciones funcionan exactamente igual que en la versión Docker
+
+Solo se incluyen las herramientas cliente de PostgreSQL más recientes. Un `pg_dump` más nuevo hace copias de seguridad de todas las versiones de servidor compatibles, pero puede que su volcado no se restaure en un servidor más antiguo; la pantalla de restauración lo advierte.
+
+**No disponible en Windows:**
+
+- MySQL, MariaDB y MongoDB
+- Copias de seguridad físicas e incrementales, streaming de WAL y PITR
+- Agente de verificación de restauración
+- Scripts integrados de restauración física
+- Copia de seguridad de la base de datos de metadatos del propio Databasus
+- Carpetas compartidas de red (rutas UNC) como directorio de copias de seguridad
+- Ejecutar el servicio con una cuenta de dominio o una gMSA
+
+La Web UI oculta los motores y los modos de copia de seguridad que no están disponibles.
+
+**Instalación:**
+
+1. Ejecute el `.exe` del instalador como administrador. No necesita conexión a la red e instala la aplicación, un servidor PostgreSQL integrado para los metadatos del propio Databasus y las herramientas cliente de PostgreSQL. El instalador todavía no tiene firma de código, así que Windows puede avisar de un editor desconocido
+2. Elija el directorio de datos del programa (por defecto `C:\ProgramData\Databasus`), que guarda la base de datos de metadatos, la clave secreta y los logs, y un directorio de copias de seguridad en cualquier disco local, por ejemplo `D:\`. El instalador comprueba que la cuenta del servicio pueda escribir en ambos
+3. Elija el puerto de la Web UI. Por defecto, la Web UI solo escucha en `127.0.0.1`. Para que sus compañeros puedan acceder, active el acceso desde la red local: siempre usa HTTPS, con un certificado que usted importa o uno autofirmado que genera el instalador
+4. Si lo desea, en las opciones avanzadas puede hacer que Databasus use una base de datos PostgreSQL externa para los metadatos en lugar de la integrada
+5. Al terminar la instalación, Databasus se ejecuta como servicio de Windows con inicio automático, se reinicia si falla y el navegador abre la Web UI. Puede iniciarlo, detenerlo o reiniciarlo desde la consola de Servicios de Windows
+
+El instalador también tiene un modo silencioso en el que todas las opciones se pasan por línea de comandos, para instalaciones con scripts.
+
+**Actualización:** ejecute el instalador nuevo sobre la instalación existente. Se conservan la configuración, las bases de datos, las programaciones y las copias de seguridad, las migraciones de metadatos se ejecutan solas y el PostgreSQL integrado recibe sus actualizaciones menores sin ninguna conversión de datos.
+
+**Logs:** se guardan en una carpeta dentro del directorio de datos del programa. Los problemas de arranque, como que falten las herramientas cliente o que la base de datos de metadatos no arranque, también se registran en el Visor de eventos de Windows.
+
+**Desinstalación:** por defecto, el directorio de datos del programa y el directorio de copias de seguridad se quedan en el disco. Para borrarlos, marque la opción de eliminar todos los datos. Sin la clave secreta del directorio de datos del programa, la configuración cifrada y las copias de seguridad cifradas no se pueden recuperar.
+
+---
+
 ## 🚀 Uso
 
 1. **Cree la primera cuenta**: abra `http://localhost:4005` y regístrese. La primera cuenta creada en una instancia es la que la administra

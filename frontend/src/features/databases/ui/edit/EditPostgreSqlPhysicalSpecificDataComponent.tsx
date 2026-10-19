@@ -18,6 +18,7 @@ import {
   physicalConnectionErrorContent,
 } from '../../../../entity/databases';
 import { ConnectionStringParser } from '../../../../entity/databases/model/postgresql/ConnectionStringParser';
+import { AvailabilityFeature, useAvailability } from '../../../../entity/system';
 import { ApiError } from '../../../../shared/api';
 import {
   TransByKey,
@@ -286,6 +287,8 @@ export const EditPostgreSqlPhysicalSpecificDataComponent = ({
     invalidateConnectionTest();
   };
 
+  const { isFeatureAvailable } = useAvailability();
+
   useEffect(() => {
     setIsSaving(false);
     invalidateConnectionTest();
@@ -452,18 +455,25 @@ export const EditPostgreSqlPhysicalSpecificDataComponent = ({
     if (!isSshTunnelReadyToTest(editingDatabase.postgresqlPhysical?.sshTunnel, hasStoredSshSecrets))
       isAllFieldsFilled = false;
 
+    const selectedBackupType =
+      editingDatabase.postgresqlPhysical?.backupType ?? PhysicalDatabaseBackupType.FULL;
+    const selectableBackupTypes = Object.values(PhysicalDatabaseBackupType).filter(
+      (backupType) =>
+        backupType !== PhysicalDatabaseBackupType.FULL_INCREMENTAL_WAL_STREAM ||
+        backupType === selectedBackupType ||
+        isFeatureAvailable(AvailabilityFeature.PITR),
+    );
+
     return (
       <>
         <div className="mb-3 flex w-full items-start">
           <div className="min-w-[150px] pr-2">{t('databases.fields.backupType')}</div>
           <Radio.Group
-            value={
-              editingDatabase.postgresqlPhysical?.backupType ?? PhysicalDatabaseBackupType.FULL
-            }
+            value={selectedBackupType}
             onChange={(e) => updateBackupType(e.target.value)}
           >
             <Space direction="vertical" size={0}>
-              {Object.values(PhysicalDatabaseBackupType).map((backupType) => (
+              {selectableBackupTypes.map((backupType) => (
                 <Radio key={backupType} value={backupType} className="my-1! leading-[17px]!">
                   {t(PHYSICAL_DATABASE_BACKUP_TYPE_LABEL_KEYS[backupType])}
                   <Tooltip

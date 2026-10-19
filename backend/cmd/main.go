@@ -2,16 +2,15 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
-	"os/signal"
 	"path/filepath"
 	"runtime/debug"
-	"syscall"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -40,6 +39,8 @@ import (
 	"databasus-backend/internal/features/restores/restoring"
 	"databasus-backend/internal/features/storages"
 	system_agent "databasus-backend/internal/features/system/agent"
+	system_availability "databasus-backend/internal/features/system/availability"
+	system_backupsfolder "databasus-backend/internal/features/system/backupsfolder"
 	system_healthcheck "databasus-backend/internal/features/system/healthcheck"
 	system_version "databasus-backend/internal/features/system/version"
 	task_cancellation "databasus-backend/internal/features/tasks/cancellation"
@@ -55,6 +56,7 @@ import (
 	"databasus-backend/internal/middleware"
 	env_utils "databasus-backend/internal/util/env"
 	files_utils "databasus-backend/internal/util/files"
+	"databasus-backend/internal/util/locations"
 	"databasus-backend/internal/util/logger"
 	_ "databasus-backend/swagger" // swagger docs
 )
@@ -67,8 +69,6 @@ import (
 // @host localhost:4005
 // @BasePath /api/v1
 // @schemes http
-
-const serverAddr = ":4005"
 
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
@@ -328,21 +328,37 @@ func resetPassword(ctx context.Context, email, newPassword string, log *slog.Log
 }
 
 func startServerWithGracefulShutdown(log *slog.Logger, app *gin.Engine) {
+	address, err := getServerAddress()
+	if err != nil {
+		log.Error("invalid http server address", "error", err)
+		logger.ExitAfterFlush(1)
+	}
+
 	srv := &http.Server{
-		Addr:    serverAddr,
+		Addr:    address.getListenAddress(),
 		Handler: app,
 	}
 
-	log.Info(fmt.Sprintf("http server listening on %s", serverAddr))
+	if address.isHTTPS() {
+		srv.TLSConfig, err = loadServerTLSConfig(address.tlsCertFile, address.tlsKeyFile)
+		if err != nil {
+			log.Error("cannot load the HTTPS certificate", "error", err)
+			logger.ExitAfterFlush(1)
+		}
+
+		log.Info(fmt.Sprintf("https server listening on %s (no plain HTTP)", srv.Addr))
+	} else {
+		log.Info(fmt.Sprintf("http server listening on %s", srv.Addr))
+	}
 
 	go func() {
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := listenAndServe(srv); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Error("http server failed to listen", "error", err)
 		}
 	}()
 
 	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+	notifyOnShutdownRequest(log, quit)
 	<-quit
 	log.Info("shutdown signal received")
 
@@ -388,6 +404,8 @@ func setUpRoutes(r *gin.Engine) {
 	protected.Use(authMiddleware)
 
 	userController.RegisterProtectedRoutes(protected)
+	system_availability.GetAvailabilityController().RegisterRoutes(protected)
+	system_backupsfolder.GetBackupsFolderController().RegisterRoutes(protected)
 	workspaces_controllers.GetWorkspaceController().RegisterRoutes(protected)
 	workspaces_controllers.GetMembershipController().RegisterRoutes(protected)
 	disk.GetDiskController().RegisterRoutes(protected)
@@ -446,7 +464,7 @@ func runBackgroundTasks(log *slog.Logger) {
 
 	// Set up signal handling for graceful shutdown
 	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+	notifyOnShutdownRequest(log, quit)
 	go func() {
 		<-quit
 		log.Info("shutdown signal received, cancelling all background tasks")
@@ -552,25 +570,6 @@ func generateSwaggerDocs(log *slog.Logger) {
 	log.Info("swagger documentation generated successfully")
 }
 
-func runMigrations(log *slog.Logger) {
-	log.Info("running database migrations")
-
-	cmd := exec.CommandContext(context.Background(), "goose", "-dir", "./migrations", "up")
-	cmd.Env = append(
-		os.Environ(),
-		"GOOSE_DRIVER=postgres",
-		"GOOSE_DBSTRING="+config.GetEnv().DatabaseDsn,
-	)
-
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		log.Error("failed to run migrations", "error", err, "output", string(output))
-		logger.ExitAfterFlush(1)
-	}
-
-	log.Info("database migrations completed successfully", "output", string(output))
-}
-
 func enableCors(ginApp *gin.Engine) {
 	if config.GetEnv().EnvMode == env_utils.EnvModeDevelopment {
 		// Setup CORS
@@ -617,7 +616,7 @@ func ginRecoveryWithLogger(log *slog.Logger) gin.HandlerFunc {
 }
 
 func mountFrontend(ginApp *gin.Engine) {
-	staticDir := "./ui/build"
+	staticDir := locations.FindAppFolder(filepath.Join("ui", "build"))
 	ginApp.NoRoute(func(c *gin.Context) {
 		path := filepath.Join(staticDir, c.Request.URL.Path)
 

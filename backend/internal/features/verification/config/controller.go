@@ -6,7 +6,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	system_availability "databasus-backend/internal/features/system/availability"
 	users_middleware "databasus-backend/internal/features/users/middleware"
+	"databasus-backend/internal/util/availability"
 )
 
 type VerificationConfigController struct {
@@ -15,7 +17,11 @@ type VerificationConfigController struct {
 
 func (c *VerificationConfigController) RegisterRoutes(router *gin.RouterGroup) {
 	router.GET("/verification-config/:databaseId", c.GetByDatabaseID)
-	router.PUT("/verification-config/:databaseId", c.Save)
+	router.PUT(
+		"/verification-config/:databaseId",
+		system_availability.RequireFeature(availability.FeatureVerificationAgent),
+		c.Save,
+	)
 }
 
 // GetByDatabaseID

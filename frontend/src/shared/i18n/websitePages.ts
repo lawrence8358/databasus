@@ -2,6 +2,10 @@ import type { Locale } from './dictionaries';
 
 const WEBSITE_URL = 'https://databasus.com';
 
+// The website's Chinese pages are Simplified Chinese, while the application ships Traditional
+// Chinese, so Chinese users get the English pages.
+const LOCALES_WITHOUT_WEBSITE_PAGES: readonly Locale[] = ['zh'];
+
 interface WebsitePage {
   // Path without leading or trailing slash; "" is the home page
   path: string;
@@ -44,7 +48,9 @@ export type WebsitePageId = keyof typeof WEBSITE_PAGES;
 // English page otherwise. URLs end with a slash, the website's canonical form.
 export const getWebsitePageUrl = (pageId: WebsitePageId, locale: Locale): string => {
   const page: WebsitePage = WEBSITE_PAGES[pageId];
-  const languagePrefix = page.isTranslated && locale !== 'en' ? `/${locale}` : '';
+  const isPublishedInLocale =
+    page.isTranslated && locale !== 'en' && !LOCALES_WITHOUT_WEBSITE_PAGES.includes(locale);
+  const languagePrefix = isPublishedInLocale ? `/${locale}` : '';
   const path = page.path ? `/${page.path}/` : '/';
   const anchor = page.anchor ? `#${page.anchor}` : '';
 

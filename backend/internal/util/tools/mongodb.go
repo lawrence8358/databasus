@@ -32,7 +32,7 @@ const (
 // binary. The tools are version-agnostic — a single client supports all
 // supported server versions (4.2 – 9.x).
 func GetMongodbExecutable(executable MongodbExecutable) string {
-	return filepath.Join(getMongodbBinDir(), string(executable))
+	return getExecutablePath(getMongodbBinDir(), string(executable))
 }
 
 func getMongodbBinDir() string {
@@ -45,7 +45,7 @@ func checkMongodb() []ToolCheckResult {
 	binDir := getMongodbBinDir()
 
 	return []ToolCheckResult{{
-		Db:      "mongodb",
+		Db:      DbEngineMongodb,
 		Version: "tools",
 		BinDir:  binDir,
 		// The MongoDB tools bundle is not named after a release line — one

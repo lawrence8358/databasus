@@ -55,7 +55,7 @@ func GetMysqlExecutable(version MysqlVersion, executable MysqlExecutable) (strin
 		return "", err
 	}
 
-	return filepath.Join(getMysqlBinDir(version), string(executable)), nil
+	return getExecutablePath(getMysqlBinDir(version), string(executable)), nil
 }
 
 // RequireMysqlBundle reports whether this architecture ships a client for the
@@ -89,7 +89,7 @@ func checkMysql() []ToolCheckResult {
 		binDir := getMysqlBinDir(v)
 
 		results = append(results, ToolCheckResult{
-			Db:      "mysql",
+			Db:      DbEngineMysql,
 			Version: string(v),
 			BinDir:  binDir,
 			Errors:  runBinDirChecks(binDir, mysqlRequired, string(v), parseMysqlClientVersion),

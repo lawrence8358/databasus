@@ -4,53 +4,37 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
 // Every PostgreSQL client answers --version with "<tool> (PostgreSQL) 17.10".
 var postgresqlVersionPattern = regexp.MustCompile(`\(PostgreSQL\)\s+(\d[\d.]*)`)
 
-var postgresqlVersions = []PostgresqlVersion{
-	PostgresqlVersion12,
-	PostgresqlVersion13,
-	PostgresqlVersion14,
-	PostgresqlVersion15,
-	PostgresqlVersion16,
-	PostgresqlVersion17,
-	PostgresqlVersion18,
-}
-
-var postgresqlRequired = []string{
-	string(PostgresqlExecutablePgDump),
-	string(PostgresqlExecutablePsql),
-}
-
-// postgresqlRequiredV17Plus extends the base set with the physical-backup
-// binaries. pg_basebackup --incremental and pg_combinebackup are PG 17+ only,
-// so pre-17 versions stay on the smaller list.
-var postgresqlRequiredV17Plus = []string{
-	string(PostgresqlExecutablePgDump),
-	string(PostgresqlExecutablePsql),
-	string(PostgresqlExecutablePgBasebackup),
-	string(PostgresqlExecutablePgReceivewal),
-	string(PostgresqlExecutablePgCombinebackup),
-}
-
-func getPostgresqlRequiredForVersion(version PostgresqlVersion) []string {
-	if version == PostgresqlVersion17 || version == PostgresqlVersion18 {
-		return postgresqlRequiredV17Plus
-	}
-
-	return postgresqlRequired
-}
-
-// GetPostgresqlExecutable returns the absolute path to a PostgreSQL client
-// binary for the given version (e.g. pg_dump, pg_restore, psql).
+// GetPostgresqlExecutable returns the absolute path to the PostgreSQL client
+// binary (e.g. pg_dump, pg_restore, psql) that serves a server of the given
+// version.
 func GetPostgresqlExecutable(
-	version PostgresqlVersion,
+	serverVersion PostgresqlVersion,
 	executable PostgresqlExecutable,
 ) string {
-	return filepath.Join(getPostgresqlBinDir(version), string(executable))
+	return getExecutablePath(
+		getPostgresqlBinDir(getPostgresqlBundleVersion(serverVersion)),
+		string(executable),
+	)
+}
+
+// GetPostgresqlClientMajorVersion returns the major version of the client
+// bundle that serves a server of the given version, or 0 when it cannot be
+// read. Backups record it so the restore screen can warn when the target
+// server is older than the client that produced the dump.
+func GetPostgresqlClientMajorVersion(serverVersion PostgresqlVersion) int {
+	major, err := strconv.Atoi(string(getPostgresqlBundleVersion(serverVersion)))
+	if err != nil {
+		return 0
+	}
+
+	return major
 }
 
 func getPostgresqlBinDir(version PostgresqlVersion) string {
@@ -62,17 +46,17 @@ func getPostgresqlBinDir(version PostgresqlVersion) string {
 	)
 }
 
-// checkPostgresql verifies every supported PG version's bin directory. PG is
+// checkPostgresql verifies every bundled PG client's bin directory. PG is
 // fatal-tier — the app reads the version from each managed database and must
-// be able to invoke the matching client.
+// be able to invoke the client that serves it.
 func checkPostgresql() []ToolCheckResult {
-	results := make([]ToolCheckResult, 0, len(postgresqlVersions))
+	results := make([]ToolCheckResult, 0, len(postgresqlBundledVersions))
 
-	for _, v := range postgresqlVersions {
+	for _, v := range postgresqlBundledVersions {
 		binDir := getPostgresqlBinDir(v)
 
 		results = append(results, ToolCheckResult{
-			Db:      "postgresql",
+			Db:      DbEnginePostgresql,
 			Version: string(v),
 			BinDir:  binDir,
 			Errors: runBinDirChecks(

@@ -535,6 +535,43 @@ Details: permission denied`}</code></pre>
                 e o link para esta documentação.
               </p>
 
+              <h2 id="data-locations">Local dos dados</h2>
+
+              <p>O Databasus guarda a chave secreta, o arquivo de instância e o log em uma pasta de dados, e os backups locais em uma pasta de backups. A imagem Docker guarda as duas no volume <code>/databasus-data</code>, então ali não defina estas variáveis e monte o volume. Elas servem para rodar fora da imagem, por exemplo como serviço do Windows. Caminhos relativos são resolvidos a partir do diretório de trabalho.</p>
+
+              <table>
+                <thead>
+                  <tr>
+                    <th>Variável</th>
+                    <th>Padrão</th>
+                    <th>Descrição</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>
+                      <code>DATABASUS_DATA_DIR</code>
+                    </td>
+                    <td data-label="Padrão"><code>/databasus-data</code></td>
+                    <td data-label="Descrição">Chave secreta, <code>instance.json</code> e <code>databasus.log</code>.</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>DATABASUS_BACKUPS_DIR</code>
+                    </td>
+                    <td data-label="Padrão"><code>DATABASUS_DATA_DIR/backups</code></td>
+                    <td data-label="Descrição">Backups do armazenamento local.</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>DATABASUS_TEMP_DIR</code>
+                    </td>
+                    <td data-label="Padrão">a pasta <code>temp</code> dentro de <code>DATABASUS_BACKUPS_DIR</code> quando ela está definida; caso contrário, <code>DATABASUS_DATA_DIR/temp</code></td>
+                    <td data-label="Descrição">Arquivos que ainda estão sendo gravados. Mantenha no mesmo disco da pasta de backups: assim concluir um backup é renomear o arquivo, não copiá-lo.</td>
+                  </tr>
+                </tbody>
+              </table>
+
               <h2 id="telemetry">Telemetria</h2>
 
               <p>

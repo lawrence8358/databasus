@@ -531,6 +531,43 @@ Details: permission denied`}</code></pre>
                 и укажет неудавшуюся операцию вместе со ссылкой на эту инструкцию.
               </p>
 
+              <h2 id="data-locations">Расположение данных</h2>
+
+              <p>Databasus хранит секретный ключ, файл экземпляра и лог в папке данных, а локальные бекапы в папке бекапов. В Docker-образе обе лежат на томе <code>/databasus-data</code>, поэтому там эти переменные не задавайте, а подключайте том. Они нужны для запуска вне образа, например как службы Windows. Относительные пути считаются от рабочей папки.</p>
+
+              <table>
+                <thead>
+                  <tr>
+                    <th>Переменная</th>
+                    <th>По умолчанию</th>
+                    <th>Описание</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>
+                      <code>DATABASUS_DATA_DIR</code>
+                    </td>
+                    <td data-label="По умолчанию"><code>/databasus-data</code></td>
+                    <td data-label="Описание">Секретный ключ, <code>instance.json</code> и <code>databasus.log</code>.</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>DATABASUS_BACKUPS_DIR</code>
+                    </td>
+                    <td data-label="По умолчанию"><code>DATABASUS_DATA_DIR/backups</code></td>
+                    <td data-label="Описание">Бекапы локального хранилища.</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>DATABASUS_TEMP_DIR</code>
+                    </td>
+                    <td data-label="По умолчанию">папка <code>temp</code> внутри <code>DATABASUS_BACKUPS_DIR</code>, если она задана, иначе <code>DATABASUS_DATA_DIR/temp</code></td>
+                    <td data-label="Описание">Файлы, которые еще записываются. Держите ее на том же диске, что и папку бекапов: тогда завершение бекапа сводится к переименованию, а не к копированию.</td>
+                  </tr>
+                </tbody>
+              </table>
+
               <h2 id="telemetry">Телеметрия</h2>
 
               <p>

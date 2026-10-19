@@ -544,6 +544,43 @@ Details: permission denied`}</code></pre>
                 indique l&apos;opération en échec ainsi que le lien vers cette page.
               </p>
 
+              <h2 id="data-locations">Emplacement des données</h2>
+
+              <p>Databasus conserve sa clé secrète, le fichier d'instance et le journal dans un dossier de données, et les sauvegardes locales dans un dossier de sauvegardes. L'image Docker place les deux sur le volume <code>/databasus-data</code> : n'y définissez donc pas ces variables et montez le volume. Elles servent à exécuter Databasus hors de l'image, par exemple comme service Windows. Les chemins relatifs sont résolus depuis le répertoire de travail.</p>
+
+              <table>
+                <thead>
+                  <tr>
+                    <th>Variable</th>
+                    <th>Valeur par défaut</th>
+                    <th>Description</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>
+                      <code>DATABASUS_DATA_DIR</code>
+                    </td>
+                    <td data-label="Valeur par défaut"><code>/databasus-data</code></td>
+                    <td data-label="Description">Clé secrète, <code>instance.json</code> et <code>databasus.log</code>.</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>DATABASUS_BACKUPS_DIR</code>
+                    </td>
+                    <td data-label="Valeur par défaut"><code>DATABASUS_DATA_DIR/backups</code></td>
+                    <td data-label="Description">Sauvegardes du stockage local.</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>DATABASUS_TEMP_DIR</code>
+                    </td>
+                    <td data-label="Valeur par défaut">le dossier <code>temp</code> dans <code>DATABASUS_BACKUPS_DIR</code> si celle-ci est définie, sinon <code>DATABASUS_DATA_DIR/temp</code></td>
+                    <td data-label="Description">Fichiers en cours d'écriture. Gardez-le sur le même disque que le dossier de sauvegardes : terminer une sauvegarde revient alors à renommer un fichier plutôt qu'à le copier.</td>
+                  </tr>
+                </tbody>
+              </table>
+
               <h2 id="telemetry">Télémétrie</h2>
 
               <p>

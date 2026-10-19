@@ -90,7 +90,7 @@ func GetMariadbExecutable(
 
 	clientVersion := GetMariadbClientVersionForServer(serverVersion)
 
-	return filepath.Join(getMariadbBinDir(clientVersion), string(executable)), nil
+	return getExecutablePath(getMariadbBinDir(clientVersion), string(executable)), nil
 }
 
 // RequireMariadbBundle reports whether this architecture ships the client
@@ -127,7 +127,7 @@ func checkMariadb() []ToolCheckResult {
 		binDir := getMariadbBinDir(cv)
 
 		results = append(results, ToolCheckResult{
-			Db:      "mariadb",
+			Db:      DbEngineMariadb,
 			Version: string(cv),
 			BinDir:  binDir,
 			Errors:  runBinDirChecks(binDir, mariadbRequired, string(cv), parseMariadbClientVersion),

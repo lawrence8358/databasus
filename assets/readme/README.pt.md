@@ -248,6 +248,50 @@ Para mais opções (NodePort, TLS, HTTPRoute do Gateway API), veja o [README do 
 
 ---
 
+## 🪟 Instalador nativo para Windows
+
+Este fork (`lawrence8358/databasus`) também distribui o Databasus como instalador nativo para Windows, para máquinas onde Docker e WSL2 não são permitidos. O motivo de o fork sair da abordagem só com Docker está registrado no [ADR-0015](../../adr/0015-windows-native-installer-in-fork.md).
+
+**Sistemas suportados:** Windows Server 2016 ou mais recente e Windows 10/11, só x64. Em qualquer outra versão do Windows ou arquitetura de CPU, o instalador explica o motivo e para.
+
+**O que funciona no Windows:**
+
+- Backup lógico e restauração de PostgreSQL 12 ou mais recente (`pg_dump` / `pg_restore`). As bases de dados podem rodar em qualquer sistema operacional e são acessadas pela rede
+- Armazenamento em disco local e os armazenamentos remotos que o Databasus já suporta (S3, Azure Blob, FTP, SFTP, etc.)
+- Agendamentos, políticas de retenção, criptografia e notificações funcionam exatamente como na versão Docker
+
+Só as ferramentas cliente mais recentes do PostgreSQL vêm no pacote. Um `pg_dump` mais novo faz backup de todas as versões de servidor suportadas, mas o dump pode falhar ao ser restaurado em um servidor mais antigo; a tela de restauração avisa sobre isso.
+
+**Indisponível no Windows:**
+
+- MySQL, MariaDB e MongoDB
+- Backups físicos e incrementais, streaming de WAL e PITR
+- Agente de verificação de restauração
+- Scripts embutidos de restauração física
+- Backup da própria base de metadados do Databasus
+- Pastas compartilhadas de rede (caminhos UNC) como diretório de backups
+- Rodar o serviço com uma conta de domínio ou gMSA
+
+A Web UI esconde os bancos e os modos de backup indisponíveis.
+
+**Instalação:**
+
+1. Execute o `.exe` do instalador como administrador. Ele não precisa de rede e instala o aplicativo, um servidor PostgreSQL embutido para os metadados do próprio Databasus e as ferramentas cliente do PostgreSQL. O instalador ainda não tem assinatura de código, então o Windows pode avisar sobre um editor desconhecido
+2. Escolha o diretório de dados do programa (padrão `C:\ProgramData\Databasus`), que guarda a base de metadados, a chave secreta e os logs, e um diretório de backups em qualquer disco local, por exemplo `D:\`. O instalador confere se a conta do serviço consegue gravar nos dois
+3. Escolha a porta da Web UI. Por padrão, a Web UI só escuta em `127.0.0.1`. Para que seus colegas acessem, ative o acesso pela rede local: ele sempre usa HTTPS, com um certificado que você importa ou um autoassinado gerado pelo instalador
+4. Se quiser, nas opções avançadas, aponte o Databasus para uma base PostgreSQL externa para os metadados em vez da embutida
+5. Ao final, o Databasus roda como serviço do Windows com início automático, reinicia sozinho depois de uma falha e o navegador abre a Web UI. Inicie, pare ou reinicie o serviço pelo console de Serviços do Windows
+
+O instalador também tem um modo silencioso em que todas as opções são passadas pela linha de comando, para instalações por script.
+
+**Atualização:** execute o instalador novo sobre a instalação existente. Configurações, bases de dados, agendamentos e backups são mantidos, as migrações de metadados rodam sozinhas e o PostgreSQL embutido recebe as atualizações menores sem nenhuma conversão de dados.
+
+**Logs:** ficam em uma pasta dentro do diretório de dados do programa. Problemas na inicialização, como ferramentas cliente ausentes ou uma base de metadados que não sobe, também vão para o Visualizador de Eventos do Windows.
+
+**Desinstalação:** por padrão, o diretório de dados do programa e o diretório de backups continuam no disco. Para apagá-los, marque a opção de excluir todos os dados. Sem a chave secreta do diretório de dados do programa, as configurações criptografadas e os backups criptografados não podem ser recuperados.
+
+---
+
 ## 🚀 Como usar
 
 1. **Crie a primeira conta**: acesse `http://localhost:4005` e cadastre-se. A primeira conta criada em uma instância é quem a administra

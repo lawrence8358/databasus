@@ -539,6 +539,43 @@ Details: permission denied`}</code></pre>
                 el enlace a esta documentación.
               </p>
 
+              <h2 id="data-locations">Ubicación de los datos</h2>
+
+              <p>Databasus guarda su clave secreta, el archivo de instancia y el registro en una carpeta de datos, y las copias de seguridad locales en una carpeta de copias de seguridad. La imagen de Docker guarda ambas en el volumen <code>/databasus-data</code>, así que allí no defina estas variables y monte el volumen. Sirven para ejecutar Databasus fuera de la imagen, por ejemplo como servicio de Windows. Las rutas relativas se resuelven desde el directorio de trabajo.</p>
+
+              <table>
+                <thead>
+                  <tr>
+                    <th>Variable</th>
+                    <th>Valor predeterminado</th>
+                    <th>Descripción</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>
+                      <code>DATABASUS_DATA_DIR</code>
+                    </td>
+                    <td data-label="Valor predeterminado"><code>/databasus-data</code></td>
+                    <td data-label="Descripción">Clave secreta, <code>instance.json</code> y <code>databasus.log</code>.</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>DATABASUS_BACKUPS_DIR</code>
+                    </td>
+                    <td data-label="Valor predeterminado"><code>DATABASUS_DATA_DIR/backups</code></td>
+                    <td data-label="Descripción">Copias de seguridad del almacenamiento local.</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>DATABASUS_TEMP_DIR</code>
+                    </td>
+                    <td data-label="Valor predeterminado">la carpeta <code>temp</code> dentro de <code>DATABASUS_BACKUPS_DIR</code> si está definida; si no, <code>DATABASUS_DATA_DIR/temp</code></td>
+                    <td data-label="Descripción">Archivos que aún se están escribiendo. Manténgala en el mismo disco que la carpeta de copias de seguridad: así terminar un respaldo es un cambio de nombre y no una copia.</td>
+                  </tr>
+                </tbody>
+              </table>
+
               <h2 id="telemetry">Telemetría</h2>
 
               <p>

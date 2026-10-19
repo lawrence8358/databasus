@@ -4,11 +4,13 @@ import { useEffect, useRef, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import { getApplicationServer } from '../../../constants';
+import { AvailabilityFeature, useAvailability } from '../../../entity/system';
 import { type UsersSettings, type UsersSettingsResponse, settingsApi } from '../../../entity/users';
 import { getWebsitePageUrl, translateApiError, useLocale } from '../../../shared/i18n';
 import { ClipboardHelper } from '../../../shared/lib/ClipboardHelper';
 import { VerificationAgentsComponent } from '../../verification/agents';
 import { AuditLogsComponent } from './AuditLogsComponent';
+import { BackupsFolderComponent } from './BackupsFolderComponent';
 import { MailServerComponent } from './MailServerComponent';
 
 interface Props {
@@ -43,6 +45,8 @@ export function SettingsComponent({ contentHeight }: Props) {
     isMemberAllowedToCreateWorkspaces: false,
     isTwoFactorAuthRequired: false,
   });
+
+  const { isFeatureAvailable } = useAvailability();
 
   useEffect(() => {
     loadSettings();
@@ -325,9 +329,13 @@ export function SettingsComponent({ contentHeight }: Props) {
             </div>
           </div>
 
-          <VerificationAgentsComponent />
+          {isFeatureAvailable(AvailabilityFeature.VERIFICATION_AGENT) && (
+            <VerificationAgentsComponent />
+          )}
 
           {settings && <MailServerComponent isEmailConfigured={settings.isEmailConfigured} />}
+
+          <BackupsFolderComponent />
 
           <AuditLogsComponent scrollContainerRef={scrollContainerRef} />
         </div>

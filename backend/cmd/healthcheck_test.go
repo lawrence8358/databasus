@@ -41,3 +41,14 @@ func Test_CheckServerAlive_WhenServerUnreachable_ReturnsError(t *testing.T) {
 
 	assert.Error(t, err)
 }
+
+func Test_CheckServerAlive_WhenServerUsesSelfSignedHTTPS_ReturnsNil(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	err := checkServerAlive(server.URL)
+
+	assert.NoError(t, err)
+}

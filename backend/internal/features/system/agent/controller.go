@@ -6,13 +6,19 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	system_availability "databasus-backend/internal/features/system/availability"
 	system_version "databasus-backend/internal/features/system/version"
+	"databasus-backend/internal/util/availability"
 )
 
 type AgentController struct{}
 
 func (c *AgentController) RegisterRoutes(router *gin.RouterGroup) {
-	router.GET("/system/verification-agent", c.DownloadVerificationAgent)
+	router.GET(
+		"/system/verification-agent",
+		system_availability.RequireFeature(availability.FeatureVerificationAgent),
+		c.DownloadVerificationAgent,
+	)
 }
 
 var verificationAgentBinaryPaths = map[string]string{

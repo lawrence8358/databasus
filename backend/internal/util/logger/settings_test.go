@@ -8,6 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"databasus-backend/internal/util/locations"
 )
 
 func Test_ParseLevel_WithEachSupportedName_ReturnsMatchingLevel(t *testing.T) {
@@ -172,7 +174,14 @@ func Test_ParseLogFileSettings_WhenUnset_EnabledAtDataVolumeRoot(t *testing.T) {
 	fileSettings := parseLogFileSettings()
 
 	assert.True(t, fileSettings.isEnabled)
-	assert.Equal(t, filepath.Join(getDataFolder(), "databasus.log"), fileSettings.path)
+	assert.Equal(t, filepath.Join(locations.GetDataFolder(), "databasus.log"), fileSettings.path)
+}
+
+func Test_ParseLogFileSettings_WithDataFolderConfigured_WritesIntoIt(t *testing.T) {
+	dataFolder := t.TempDir()
+	t.Setenv(locations.DataFolderEnvVariable, dataFolder)
+
+	assert.Equal(t, filepath.Join(dataFolder, "databasus.log"), parseLogFileSettings().path)
 }
 
 func Test_ParseLogFileSettings_WhenSetToFalse_Disabled(t *testing.T) {

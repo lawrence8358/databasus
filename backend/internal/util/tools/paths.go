@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 )
 
@@ -12,12 +13,13 @@ import (
 // current GOOS+GOARCH. Panics on unsupported combinations because the app
 // cannot operate without DB client binaries.
 func archAssetsKey() string {
-	if runtime.GOOS == "linux" {
-		if runtime.GOARCH == "arm64" {
-			return "arm"
-		}
-
+	switch {
+	case runtime.GOOS == "linux" && runtime.GOARCH == "arm64":
+		return "arm"
+	case runtime.GOOS == "linux":
 		return "x64"
+	case runtime.GOOS == "windows" && runtime.GOARCH == "amd64":
+		return "win-x64"
 	}
 
 	panic(fmt.Sprintf("unsupported OS/arch for DB client tools: %s/%s",
@@ -25,29 +27,53 @@ func archAssetsKey() string {
 }
 
 // AssetsToolsDir returns the absolute path to assets/tools/<arch-key>/.
-// Walks up from cwd looking for the directory. In Docker (cwd=/app) this
-// resolves to /app/assets/tools/<arch-key>/.
+// Walks up from the executable's folder, then from cwd, looking for the
+// directory. A Windows service starts in an arbitrary working directory, so
+// the executable's own location comes first; `go run` and `go test` build into
+// a temporary folder, so a development checkout is found from cwd. In Docker
+// (cwd=/app) this resolves to /app/assets/tools/<arch-key>/.
 var AssetsToolsDir = sync.OnceValue(func() string {
 	key := archAssetsKey()
+	relativePath := filepath.Join("assets", "tools", key)
 
-	cwd, err := os.Getwd()
-	if err != nil {
-		panic(fmt.Sprintf("could not get cwd: %v", err))
+	searchRoots := make([]string, 0, 2)
+
+	if executablePath, err := os.Executable(); err == nil {
+		if resolvedPath, err := filepath.EvalSymlinks(executablePath); err == nil {
+			executablePath = resolvedPath
+		}
+
+		searchRoots = append(searchRoots, filepath.Dir(executablePath))
 	}
 
-	candidate := cwd
+	if cwd, err := os.Getwd(); err == nil {
+		searchRoots = append(searchRoots, cwd)
+	}
+
+	for _, searchRoot := range searchRoots {
+		if toolsDir, isFound := findFolderUpwards(searchRoot, relativePath); isFound {
+			return toolsDir
+		}
+	}
+
+	panic(fmt.Sprintf("could not locate %s starting from %s",
+		relativePath, strings.Join(searchRoots, " or ")))
+})
+
+func findFolderUpwards(startFolder, relativePath string) (string, bool) {
+	candidate := startFolder
+
 	for {
-		path := filepath.Join(candidate, "assets", "tools", key)
+		path := filepath.Join(candidate, relativePath)
 		if info, err := os.Stat(path); err == nil && info.IsDir() {
-			return path
+			return path, true
 		}
 
 		parent := filepath.Dir(candidate)
 		if parent == candidate {
-			break
+			return "", false
 		}
+
 		candidate = parent
 	}
-
-	panic(fmt.Sprintf("could not locate assets/tools/%s starting from %s", key, cwd))
-})
+}

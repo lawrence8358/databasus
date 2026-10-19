@@ -274,6 +274,19 @@ export const fr: typeof en = {
       sendTestEmail: 'Envoyer un e-mail de test',
       testEmailSent: 'E-mail de test envoyé à {{email}}',
     },
+    backupsFolder: {
+      title: 'Dossier des sauvegardes',
+      description:
+        'Le stockage local écrit les nouvelles sauvegardes dans ce dossier. Le changer ne déplace rien : les sauvegardes précédentes restent où elles sont et peuvent toujours être restaurées.',
+      currentFolder: 'Dossier actuel',
+      previousFolders:
+        'Dossiers précédents, qui contiennent encore des sauvegardes plus anciennes :',
+      newFolder: 'Nouveau dossier',
+      rules:
+        "Choisissez un dossier sur un disque local fixe de cet ordinateur, pas la racine d'un lecteur, un lecteur réseau ou amovible, ni un dossier de Windows ou des programmes. Databasus le crée s'il n'existe pas et vérifie que le service peut y écrire.",
+      change: 'Changer de dossier',
+      changed: 'Les nouvelles sauvegardes vont désormais dans {{folder}}',
+    },
     healthcheck: {
       title: 'Vérification de disponibilité',
       openInNewTab: 'Cliquez pour ouvrir dans un nouvel onglet',
@@ -744,6 +757,12 @@ export const fr: typeof en = {
         '<bold>⚠️ Attention :</bold> si vous annulez cette restauration, votre base de données restera probablement corrompue ou incomplète. Vous devrez la recréer avant de tenter une nouvelle restauration.',
       question: 'Voulez-vous vraiment annuler ?',
       confirm: 'Oui, annuler la restauration',
+    },
+    olderTargetWarning: {
+      message:
+        "Attention : cette sauvegarde a été produite avec les outils clients PostgreSQL {{clientVersion}}, mais le serveur cible exécute PostgreSQL {{targetVersion}}. Un dump issu d'un client plus récent peut échouer à la restauration sur un serveur plus ancien, par exemple à cause de paramètres que l'ancien serveur ne connaît pas.",
+      question: 'Voulez-vous restaurer malgré tout ?',
+      confirm: 'Restaurer malgré tout',
     },
   },
   healthcheck: {

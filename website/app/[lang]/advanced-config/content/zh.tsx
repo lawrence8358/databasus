@@ -511,6 +511,43 @@ Details: permission denied`}</code></pre>
                 无法访问 mount，启动会停止，并显示失败的操作以及本文档链接。
               </p>
 
+              <h2 id="data-locations">数据位置</h2>
+
+              <p>Databasus 把密钥、实例文件和日志放在数据目录，把本地备份放在备份目录。Docker 镜像把两者都放在 <code>/databasus-data</code> 卷上，所以在 Docker 中不要设置这些变量，挂载该卷即可。它们用于在镜像之外运行，例如作为 Windows 服务。相对路径以工作目录为基准解析。</p>
+
+              <table>
+                <thead>
+                  <tr>
+                    <th>变量</th>
+                    <th>默认值</th>
+                    <th>说明</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>
+                      <code>DATABASUS_DATA_DIR</code>
+                    </td>
+                    <td data-label="默认值"><code>/databasus-data</code></td>
+                    <td data-label="说明">密钥、<code>instance.json</code> 和 <code>databasus.log</code>。</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>DATABASUS_BACKUPS_DIR</code>
+                    </td>
+                    <td data-label="默认值"><code>DATABASUS_DATA_DIR/backups</code></td>
+                    <td data-label="说明">本地存储的备份。</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>DATABASUS_TEMP_DIR</code>
+                    </td>
+                    <td data-label="默认值">设置了 <code>DATABASUS_BACKUPS_DIR</code> 时为其中的 <code>temp</code> 目录，否则为 <code>DATABASUS_DATA_DIR/temp</code></td>
+                    <td data-label="说明">仍在写入的文件。请把它放在与备份目录相同的磁盘上，这样完成备份只需重命名，不必复制。</td>
+                  </tr>
+                </tbody>
+              </table>
+
               <h2 id="telemetry">遥测</h2>
 
               <p>

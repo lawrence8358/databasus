@@ -9,11 +9,11 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"syscall"
+	"slices"
 
 	"github.com/google/uuid"
 
-	"databasus-backend/internal/config"
+	"databasus-backend/internal/util/backupsfolder"
 	"databasus-backend/internal/util/encryption"
 	files_utils "databasus-backend/internal/util/files"
 )
@@ -51,10 +51,11 @@ func (l *LocalStorage) SaveFile(
 
 	logger.InfoContext(ctx, "starting to save file to local storage", "file_name", fileName)
 
-	tempFilePath := filepath.Join(config.GetEnv().TempFolder, fileName)
+	tempFolder := backupsfolder.GetTempFolder()
+	tempFilePath := filepath.Join(tempFolder, fileName)
 
 	err := files_utils.EnsureDirectories([]string{
-		config.GetEnv().TempFolder,
+		tempFolder,
 		filepath.Dir(tempFilePath),
 	})
 	if err != nil {
@@ -98,7 +99,7 @@ func (l *LocalStorage) SaveFile(
 		return fmt.Errorf("failed to close temp file: %w", err)
 	}
 
-	finalPath := filepath.Join(config.GetEnv().DataFolder, fileName)
+	finalPath := filepath.Join(backupsfolder.GetCurrentFolder(), fileName)
 	logger.DebugContext(
 		ctx,
 		"moving file from temp to final location",
@@ -147,18 +148,22 @@ func (l *LocalStorage) GetFile(
 	_ *slog.Logger,
 	fileName string,
 ) (io.ReadCloser, error) {
-	filePath := filepath.Join(config.GetEnv().DataFolder, fileName)
+	// A backups folder changed after installation leaves earlier backups in the folder they were
+	// written to.
+	for _, backupsFolder := range backupsfolder.GetFoldersHoldingBackups() {
+		file, err := os.Open(filepath.Join(backupsFolder, fileName))
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
 
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		return nil, fmt.Errorf("file not found: %s", fileName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open file: %w", err)
+		}
+
+		return file, nil
 	}
 
-	file, err := os.Open(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open file: %w", err)
-	}
-
-	return file, nil
+	return nil, fmt.Errorf("file not found: %s", fileName)
 }
 
 func (l *LocalStorage) DeleteFile(
@@ -169,9 +174,12 @@ func (l *LocalStorage) DeleteFile(
 ) error {
 	// An interrupted write leaves the staging copy behind, and a cross-filesystem
 	// publication can leave a partial file at the final path.
-	paths := []string{
-		filepath.Join(config.GetEnv().DataFolder, fileName),
-		filepath.Join(config.GetEnv().TempFolder, fileName),
+	paths := []string{}
+	for _, folder := range slices.Concat(
+		backupsfolder.GetFoldersHoldingBackups(),
+		backupsfolder.GetTempFoldersHoldingFiles(),
+	) {
+		paths = append(paths, filepath.Join(folder, fileName))
 	}
 
 	for _, path := range paths {
@@ -190,7 +198,7 @@ func (l *LocalStorage) Validate(encryptor encryption.FieldEncryptor) error {
 }
 
 func (l *LocalStorage) TestConnection(encryptor encryption.FieldEncryptor) error {
-	testFile := filepath.Join(config.GetEnv().TempFolder, "test_connection")
+	testFile := filepath.Join(backupsfolder.GetTempFolder(), "test_connection")
 	f, err := os.Create(testFile)
 	if err != nil {
 		return fmt.Errorf("failed to create test file: %w", err)
@@ -217,9 +225,10 @@ func (l *LocalStorage) Update(incoming *LocalStorage) {
 }
 
 // moveFile moves a file from src to dst. It first attempts os.Rename for efficiency.
-// If rename fails with a cross-device link error (EXDEV), it falls back to copy-then-delete.
-// This happens when users mount temp and backups directories as separate Docker volumes
-// (e.g., on Unraid with split volume mapping), causing them to reside on different filesystems.
+// If rename fails because the two paths are on different filesystems, it falls back to
+// copy-then-delete. This happens when users mount temp and backups directories as separate
+// Docker volumes (e.g., on Unraid with split volume mapping), or on Windows when the temp
+// folder is configured on another drive than the backups folder.
 func moveFile(src, dst string) error {
 	err := os.Rename(src, dst)
 	if err == nil {
@@ -227,10 +236,24 @@ func moveFile(src, dst string) error {
 	}
 
 	var linkErr *os.LinkError
-	if !errors.As(err, &linkErr) || !errors.Is(linkErr.Err, syscall.EXDEV) {
+	if !errors.As(err, &linkErr) || !isCrossDeviceError(linkErr.Err) {
 		return err
 	}
 
+	if err = copyFileAndSync(src, dst); err != nil {
+		return err
+	}
+
+	// Windows refuses to delete a file that is still open, so the source is
+	// removed only after copyFileAndSync has closed both handles.
+	if err = os.Remove(src); err != nil {
+		return fmt.Errorf("failed to remove source file: %w", err)
+	}
+
+	return nil
+}
+
+func copyFileAndSync(src, dst string) error {
 	srcFile, err := os.Open(src)
 	if err != nil {
 		return fmt.Errorf("failed to open source file: %w", err)
@@ -253,10 +276,6 @@ func moveFile(src, dst string) error {
 
 	if err = dstFile.Sync(); err != nil {
 		return fmt.Errorf("failed to sync destination file: %w", err)
-	}
-
-	if err = os.Remove(src); err != nil {
-		return fmt.Errorf("failed to remove source file: %w", err)
 	}
 
 	return nil
