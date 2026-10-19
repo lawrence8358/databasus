@@ -4,6 +4,8 @@
 ;
 ; Silent install:   databasus-setup-<version>-x64.exe /VERYSILENT /SUPPRESSMSGBOXES
 ;                     [/DIR=<install dir>] [/DATADIR=<dir>] [/BACKUPSDIR=<dir>] [/PORT=<port>] [/LOG=<file>]
+;                   The backups folder is recorded in <data dir>\backups-folder.txt, which the Web UI
+;                   (Databasus settings) also changes; the service command line does not carry it.
 ;                   Exit code 0: installed and the Web UI answers. 7: a check failed before anything was
 ;                   installed (the reason is in the log). 10: files are installed but the service did
 ;                   not register or start (the reason is in the log).
@@ -20,9 +22,11 @@
 ;                   is generated. /LOCALONLY switches back to 127.0.0.1. An upgrade keeps the earlier
 ;                   choice and certificate unless one of them is given.
 ; Upgrade:          run a newer setup over the installed one; it keeps the earlier data folder,
-;                   backups folder and port (/DATADIR, /BACKUPSDIR and /PORT are ignored) and refuses,
-;                   before stopping the service, a metadata database of another PostgreSQL major. It also
-;                   refuses an older version over a newer one (exit code 7 when silent).
+;                   port (/DATADIR and /PORT are ignored) and refuses, before stopping the service, a
+;                   metadata database of another PostgreSQL major. It also refuses an older version over
+;                   a newer one (exit code 7 when silent). It keeps the backups folder the service uses
+;                   (also one changed in the Web UI) unless /BACKUPSDIR or the folders page names
+;                   another; backups in earlier folders stay where they are and remain restorable.
 ; Silent uninstall: "<install dir>\unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES [/DELETEDATA]
 
 #ifndef AppVersion
@@ -112,8 +116,10 @@ var
   PortPage: TInputQueryWizardPage;
   IsLauncherExtracted: Boolean;
   UninstallDataDir: String;
-  UninstallBackupsDir: String;
+  UninstallBackupsDirs: TArrayOfString;
   IsDeleteDataRequested: Boolean;
+  { On an upgrade, the backups folder the installed service uses; '' on a fresh install. }
+  InUseBackupsDir: String;
 
 { ---------- LAN access: the choice the settings below depend on ---------- }
 
@@ -133,6 +139,63 @@ begin
     Result := Default;
 end;
 
+{ The service records its backups folder, and the folders it used before (which still hold older
+  backups), in <data dir>\backups-folder.txt as current=<folder> and previous=<folder> lines. The Web
+  UI changes it there, so it wins over the BackupsDir value of the settings key. Returns the folders,
+  the current one first, or none when the file does not exist. }
+function ReadRecordedBackupsFolders(const DataDir: String): TArrayOfString;
+var
+  Lines: TArrayOfString;
+  I, Count, Pass: Integer;
+  Line, Key: String;
+begin
+  SetArrayLength(Result, 0);
+  if (Trim(DataDir) = '') or
+    not LoadStringsFromFile(AddBackslash(Trim(DataDir)) + 'backups-folder.txt', Lines) then
+    exit;
+  Count := 0;
+  for Pass := 0 to 1 do
+  begin
+    if Pass = 0 then
+      Key := 'current='
+    else
+      Key := 'previous=';
+    for I := 0 to GetArrayLength(Lines) - 1 do
+    begin
+      Line := Trim(Lines[I]);
+      if (Copy(Line, 1, Length(Key)) = Key) and (Trim(Copy(Line, Length(Key) + 1, MaxInt)) <> '') then
+      begin
+        SetArrayLength(Result, Count + 1);
+        Result[Count] := Trim(Copy(Line, Length(Key) + 1, MaxInt));
+        Count := Count + 1;
+      end;
+    end;
+    { previous= lines without a current= line mean a damaged file, which the service refuses too. }
+    if Count = 0 then
+      exit;
+  end;
+end;
+
+function GetBackupsDirInUse(const DataDir: String): String;
+var
+  RecordedFolders: TArrayOfString;
+begin
+  RecordedFolders := ReadRecordedBackupsFolders(DataDir);
+  if GetArrayLength(RecordedFolders) > 0 then
+    Result := RecordedFolders[0]
+  else
+    Result := GetPreviousSetting('BackupsDir', '');
+end;
+
+{ A quoted command-line argument ending in a backslash (D:\) would escape its closing quote. }
+function QuoteArgument(const Value: String): String;
+begin
+  Result := Value;
+  if (Result <> '') and (Result[Length(Result)] = '\') then
+    Result := Result + '\';
+  Result := '"' + Result + '"';
+end;
+
 function GetDataDir(Param: String): String;
 begin
   Result := RemoveBackslashUnlessRoot(Trim(FoldersPage.Values[0]));
@@ -141,6 +204,12 @@ end;
 function GetBackupsDir(Param: String): String;
 begin
   Result := RemoveBackslashUnlessRoot(Trim(FoldersPage.Values[1]));
+end;
+
+function IsBackupsDirChanged: Boolean;
+begin
+  Result := (InUseBackupsDir = '') or
+    (CompareText(RemoveBackslashUnlessRoot(InUseBackupsDir), GetBackupsDir('')) <> 0);
 end;
 
 function GetPort(Param: String): String;
@@ -380,7 +449,12 @@ begin
 
   Params := 'check-install';
   if CheckFolders then
-    Params := Params + ' -data-dir "' + GetDataDir('') + '" -backups-dir "' + GetBackupsDir('') + '"';
+  begin
+    Params := Params + ' -data-dir "' + GetDataDir('') + '" -install-dir ' + QuoteArgument(WizardDirValue);
+    { The folder an upgrade keeps passed the rules of its time; only a new one is checked. }
+    if IsBackupsDirChanged then
+      Params := Params + ' -backups-dir ' + QuoteArgument(GetBackupsDir(''));
+  end;
   if CheckFolders and IsExternalDbChosen then
     Params := Params + ' -external-metadata-db';
   { On a reinstall the running service holds its own port, so only a fresh install checks it. }
@@ -905,11 +979,12 @@ begin
     Result := GetDowngradeReason;
 end;
 
-{ Moving the folders during an upgrade would start the service on an empty data folder, so the
-  previous choices win over /DATADIR, /BACKUPSDIR and /PORT. }
+{ Moving the program data folder or the port during an upgrade would start the service on an empty
+  data folder or on another address, so the previous choices win over /DATADIR and /PORT. The backups
+  folder can change: the folder used so far stays recorded, so its backups remain restorable. }
 procedure KeepPreviousSettingsOnUpgrade;
 var
-  Previous: String;
+  Previous, RequestedBackupsDir: String;
 begin
   if not IsUpgrade then
     exit;
@@ -919,10 +994,16 @@ begin
     Log('Upgrade: keeping the program data folder ' + Previous + ' instead of ' + FoldersPage.Values[0]);
   FoldersPage.Values[0] := Previous;
 
-  Previous := GetPreviousSetting('BackupsDir', FoldersPage.Values[1]);
-  if CompareText(RemoveBackslashUnlessRoot(Trim(FoldersPage.Values[1])), Previous) <> 0 then
-    Log('Upgrade: keeping the backups folder ' + Previous + ' instead of ' + FoldersPage.Values[1]);
-  FoldersPage.Values[1] := Previous;
+  InUseBackupsDir := GetBackupsDirInUse(Previous);
+  RequestedBackupsDir := Trim(ExpandConstant('{param:BACKUPSDIR|}'));
+  if RequestedBackupsDir = '' then
+    FoldersPage.Values[1] := InUseBackupsDir
+  else
+  begin
+    FoldersPage.Values[1] := RequestedBackupsDir;
+    if IsBackupsDirChanged then
+      Log('Upgrade: new backups go to ' + RequestedBackupsDir + ' instead of ' + InUseBackupsDir);
+  end;
 
   Previous := GetPreviousSetting('WebPort', PortPage.Values[0]);
   if Trim(PortPage.Values[0]) <> Previous then
@@ -933,21 +1014,31 @@ end;
 <event('ShouldSkipPage')>
 function UpgradeShouldSkipPage(PageID: Integer): Boolean;
 begin
-  Result := IsUpgrade and
-    ((PageID = FoldersPage.ID) or (PageID = PortPage.ID) or (PageID = ExternalDbPage.ID));
+  Result := IsUpgrade and ((PageID = PortPage.ID) or (PageID = ExternalDbPage.ID));
 end;
 
 <event('CurPageChanged')>
 procedure UpgradeCurPageChanged(CurPageID: Integer);
 begin
+  { An upgrade shows the folders page for the backups folder only; the program data folder stays. }
+  if (CurPageID = FoldersPage.ID) and IsUpgrade then
+  begin
+    FoldersPage.Edits[0].Enabled := False;
+    FoldersPage.Buttons[0].Enabled := False;
+  end;
+
   if (CurPageID = wpReady) and IsUpgrade then
   begin
     WizardForm.ReadyMemo.Lines.Add('');
     WizardForm.ReadyMemo.Lines.Add('Upgrade from Databasus ' + GetPreviousSetting('Version', '(unknown version)') +
       '. These stay as they are, with all their data:');
     WizardForm.ReadyMemo.Lines.Add('      Program data folder: ' + GetDataDir(''));
-    WizardForm.ReadyMemo.Lines.Add('      Backups folder: ' + GetBackupsDir(''));
     WizardForm.ReadyMemo.Lines.Add('      Web UI port: ' + GetPort(''));
+    if IsBackupsDirChanged then
+      WizardForm.ReadyMemo.Lines.Add('      Backups already made, in ' + InUseBackupsDir +
+        ' (they stay restorable; new backups go to ' + GetBackupsDir('') + ')')
+    else
+      WizardForm.ReadyMemo.Lines.Add('      Backups folder: ' + GetBackupsDir(''));
     if IsExternalDbChosen then
       WizardForm.ReadyMemo.Lines.Add('      Metadata database: external PostgreSQL (stored connection string)')
     else
@@ -1176,8 +1267,20 @@ begin
     exit;
   end;
 
+  { The service is stopped here, so nothing else writes the backups folder settings meanwhile. }
+  WizardForm.StatusLabel.Caption := 'Recording the backups folder...';
+  Params := 'backups-folder -data-dir ' + QuoteArgument(GetDataDir('')) +
+    ' -set ' + QuoteArgument(GetBackupsDir('')) + ' -install-dir ' + QuoteArgument(ExpandConstant('{app}'));
+  if InUseBackupsDir <> '' then
+    Params := Params + ' -in-use ' + QuoteArgument(InUseBackupsDir);
+  if RunAndCapture(ExpandConstant('{app}\databasus-launcher.exe'), Params, Output) <> 0 then
+  begin
+    FailInstall('Recording the backups folder failed:' + #13#10 + Output);
+    exit;
+  end;
+
   WizardForm.StatusLabel.Caption := 'Registering the Databasus service...';
-  Params := 'install -data-dir "' + GetDataDir('') + '" -backups-dir "' + GetBackupsDir('') + '"' +
+  Params := 'install -data-dir "' + GetDataDir('') + '"' +
     ' -listen-host "' + GetListenHost('') + '" -port ' + GetPort('');
   if IsLanAccessChosen then
     Params := Params + ' -https';
@@ -1251,9 +1354,30 @@ end;
 { Runs after the "remove Databasus?" confirmation and before anything is removed, while the
   settings key still exists. }
 procedure AskWhetherToDeleteData;
+var
+  RegistryBackupsDir, FolderList: String;
+  I: Integer;
+  IsListed: Boolean;
 begin
   RegQueryStringValue(HKLM, '{#SettingsKey}', 'DataDir', UninstallDataDir);
-  RegQueryStringValue(HKLM, '{#SettingsKey}', 'BackupsDir', UninstallBackupsDir);
+  UninstallBackupsDirs := ReadRecordedBackupsFolders(UninstallDataDir);
+  if RegQueryStringValue(HKLM, '{#SettingsKey}', 'BackupsDir', RegistryBackupsDir) and
+    (Trim(RegistryBackupsDir) <> '') then
+  begin
+    IsListed := False;
+    for I := 0 to GetArrayLength(UninstallBackupsDirs) - 1 do
+      if CompareText(RemoveBackslashUnlessRoot(UninstallBackupsDirs[I]),
+        RemoveBackslashUnlessRoot(RegistryBackupsDir)) = 0 then
+        IsListed := True;
+    if not IsListed then
+    begin
+      SetArrayLength(UninstallBackupsDirs, GetArrayLength(UninstallBackupsDirs) + 1);
+      UninstallBackupsDirs[GetArrayLength(UninstallBackupsDirs) - 1] := RegistryBackupsDir;
+    end;
+  end;
+  FolderList := '';
+  for I := 0 to GetArrayLength(UninstallBackupsDirs) - 1 do
+    FolderList := FolderList + '  ' + UninstallBackupsDirs[I] + #13#10;
 
   IsDeleteDataRequested := HasCommandLineSwitch('/DELETEDATA');
   if UninstallSilent then
@@ -1262,9 +1386,9 @@ begin
   if not IsDeleteDataRequested then
     IsDeleteDataRequested := MsgBox(
       'Databasus keeps its data and backups when it is uninstalled:' + #13#10 + #13#10 +
-      '  ' + UninstallDataDir + #13#10 + '  ' + UninstallBackupsDir + #13#10 + #13#10 +
-      'Do you also want to delete ALL data, including every backup Databasus made in the backups folder? ' +
-      'Other files in the backups folder are kept.',
+      '  ' + UninstallDataDir + #13#10 + FolderList + #13#10 +
+      'Do you also want to delete ALL data, including every backup Databasus made in the backups folders? ' +
+      'Other files in the backups folders are kept.',
       mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES;
 
   if IsDeleteDataRequested then
@@ -1415,11 +1539,15 @@ begin
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  I: Integer;
 begin
   if (CurUninstallStep = usPostUninstall) and IsDeleteDataRequested then
   begin
     Log('Deleting all data as requested');
-    DeleteBackupsFolder(UninstallBackupsDir);
+    { The current backups folder and the ones used before it, which still hold older backups. }
+    for I := 0 to GetArrayLength(UninstallBackupsDirs) - 1 do
+      DeleteBackupsFolder(UninstallBackupsDirs[I]);
     DeleteDataFolder(UninstallDataDir);
   end;
 end;

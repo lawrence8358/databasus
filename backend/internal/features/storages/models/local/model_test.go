@@ -1,6 +1,7 @@
 package local_storage
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"databasus-backend/internal/config"
+	"databasus-backend/internal/util/backupsfolder"
 	"databasus-backend/internal/util/encryption"
 	"databasus-backend/internal/util/logger"
 )
@@ -90,4 +92,63 @@ func Test_DeleteFile_WhenRemovalIsRefused_ReturnsTheFilesystemError(t *testing.T
 	err := storage.DeleteFile(t.Context(), encryption.GetFieldEncryptor(), logger.GetLogger(), fileName)
 
 	assert.Error(t, err, "an unconfirmed absence must not be reported as a successful deletion")
+}
+
+func Test_GetFile_AfterBackupsFolderChanged_ReadsFileFromEarlierFolder(t *testing.T) {
+	storage := &LocalStorage{}
+	fileName := "earlier-folder-" + t.Name()
+	earlierPath := filepath.Join(backupsfolder.GetCurrentFolder(), fileName)
+
+	require.NoError(t, storage.SaveFile(
+		t.Context(), encryption.GetFieldEncryptor(), logger.GetLogger(), fileName, strings.NewReader("old backup"),
+	))
+	t.Cleanup(func() { _ = os.Remove(earlierPath) })
+
+	backupsfolder.SwitchCurrentFolderForTest(t, t.TempDir())
+
+	file, err := storage.GetFile(t.Context(), encryption.GetFieldEncryptor(), logger.GetLogger(), fileName)
+	require.NoError(t, err)
+
+	content, err := io.ReadAll(file)
+	require.NoError(t, file.Close())
+	require.NoError(t, err)
+	assert.Equal(t, "old backup", string(content))
+}
+
+func Test_SaveFile_AfterBackupsFolderChanged_WritesToNewFolder(t *testing.T) {
+	storage := &LocalStorage{}
+	fileName := "new-folder-" + t.Name()
+	earlierFolder := backupsfolder.GetCurrentFolder()
+	newFolder := t.TempDir()
+
+	backupsfolder.SwitchCurrentFolderForTest(t, newFolder)
+
+	require.NoError(t, storage.SaveFile(
+		t.Context(), encryption.GetFieldEncryptor(), logger.GetLogger(), fileName, strings.NewReader("new backup"),
+	))
+
+	assert.FileExists(t, filepath.Join(newFolder, fileName))
+	assert.NoFileExists(t, filepath.Join(earlierFolder, fileName))
+	assert.NoFileExists(t, filepath.Join(newFolder, "temp", fileName))
+}
+
+func Test_DeleteFile_AfterBackupsFolderChanged_RemovesFileFromEarlierFolder(t *testing.T) {
+	storage := &LocalStorage{}
+	fileName := "delete-earlier-" + t.Name()
+	earlierPath := filepath.Join(backupsfolder.GetCurrentFolder(), fileName)
+
+	require.NoError(t, storage.SaveFile(
+		t.Context(), encryption.GetFieldEncryptor(), logger.GetLogger(), fileName, strings.NewReader("old backup"),
+	))
+
+	backupsfolder.SwitchCurrentFolderForTest(t, t.TempDir())
+
+	require.NoError(t, storage.DeleteFile(
+		t.Context(), encryption.GetFieldEncryptor(), logger.GetLogger(), fileName,
+	))
+
+	assert.NoFileExists(t, earlierPath)
+
+	_, err := storage.GetFile(t.Context(), encryption.GetFieldEncryptor(), logger.GetLogger(), fileName)
+	assert.Error(t, err)
 }

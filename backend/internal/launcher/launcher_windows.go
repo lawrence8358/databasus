@@ -18,7 +18,9 @@ import (
 const defaultBackendStopTimeout = 30 * time.Second
 
 type Config struct {
-	DataFolder     string
+	DataFolder string
+	// BackupsFolder is used only while the data folder has no backups folder settings file; the
+	// first start records it there, and from then on the file decides.
 	BackupsFolder  string
 	MetadataDbPort int
 	// ExternalMetadataDsnFile, when set, names a file holding the connection string of an external
@@ -72,6 +74,11 @@ func Run(ctx context.Context, config Config) error {
 		return err
 	}
 
+	backupsFolder, err := selectBackupsFolder(config, logger)
+	if err != nil {
+		return err
+	}
+
 	metadataDatabase, err := startMetadataDatabase(ctx, config, logger, childOutput)
 	if err != nil {
 		return err
@@ -81,7 +88,7 @@ func Run(ctx context.Context, config Config) error {
 		executablePath: config.BackendExecutable,
 		metadataDsn:    metadataDatabase.getDsn(),
 		dataFolder:     config.DataFolder,
-		backupsFolder:  config.BackupsFolder,
+		backupsFolder:  backupsFolder,
 		webListenHost:  config.WebListenHost,
 		webPort:        config.WebPort,
 		webTLSFiles:    webTLSFiles,

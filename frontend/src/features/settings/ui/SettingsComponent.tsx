@@ -10,6 +10,7 @@ import { getWebsitePageUrl, translateApiError, useLocale } from '../../../shared
 import { ClipboardHelper } from '../../../shared/lib/ClipboardHelper';
 import { VerificationAgentsComponent } from '../../verification/agents';
 import { AuditLogsComponent } from './AuditLogsComponent';
+import { BackupsFolderComponent } from './BackupsFolderComponent';
 import { MailServerComponent } from './MailServerComponent';
 
 interface Props {
@@ -333,6 +334,8 @@ export function SettingsComponent({ contentHeight }: Props) {
           )}
 
           {settings && <MailServerComponent isEmailConfigured={settings.isEmailConfigured} />}
+
+          <BackupsFolderComponent />
 
           <AuditLogsComponent scrollContainerRef={scrollContainerRef} />
         </div>

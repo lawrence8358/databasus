@@ -262,6 +262,18 @@ export const zh: typeof en = {
       sendTestEmail: '傳送測試郵件',
       testEmailSent: '測試郵件已傳送至 {{email}}',
     },
+    backupsFolder: {
+      title: '備份資料夾',
+      description:
+        '本機儲存會把新的備份寫入這個資料夾。變更時不會搬動任何檔案：先前的備份留在原處，仍然可以還原。',
+      currentFolder: '目前的資料夾',
+      previousFolders: '以前使用的資料夾，裡面仍有較舊的備份：',
+      newFolder: '新的資料夾',
+      rules:
+        '請選擇這台電腦本機固定磁碟上的資料夾，不能是磁碟根目錄、網路磁碟機、卸除式磁碟或 Windows、程式資料夾。資料夾不存在時 Databasus 會自動建立，並確認服務可以寫入。',
+      change: '變更資料夾',
+      changed: '新的備份現在會寫入 {{folder}}',
+    },
     healthcheck: {
       title: '可用性檢查',
       openInNewTab: '點選在新分頁中開啟',

@@ -40,6 +40,7 @@ import (
 	"databasus-backend/internal/features/storages"
 	system_agent "databasus-backend/internal/features/system/agent"
 	system_availability "databasus-backend/internal/features/system/availability"
+	system_backupsfolder "databasus-backend/internal/features/system/backupsfolder"
 	system_healthcheck "databasus-backend/internal/features/system/healthcheck"
 	system_version "databasus-backend/internal/features/system/version"
 	task_cancellation "databasus-backend/internal/features/tasks/cancellation"
@@ -404,6 +405,7 @@ func setUpRoutes(r *gin.Engine) {
 
 	userController.RegisterProtectedRoutes(protected)
 	system_availability.GetAvailabilityController().RegisterRoutes(protected)
+	system_backupsfolder.GetBackupsFolderController().RegisterRoutes(protected)
 	workspaces_controllers.GetWorkspaceController().RegisterRoutes(protected)
 	workspaces_controllers.GetMembershipController().RegisterRoutes(protected)
 	disk.GetDiskController().RegisterRoutes(protected)
